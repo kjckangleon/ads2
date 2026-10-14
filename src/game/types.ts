@@ -381,6 +381,23 @@ export interface BeltSim {
   pulse: number
 }
 
+/**
+ * Elevated money belt from a stall's cash pile to the chest: bundles lift off
+ * the pile, ride overhead and drop into storage, so nobody walks the cash.
+ */
+export interface CashBeltSim {
+  station: StationId
+  /** ground path, pile -> chest intake (items ride above it) */
+  path: V2[]
+  dists: number[]
+  /** horizontal run; the lift up and the drop down add `lift` at each end */
+  run: number
+  length: number
+  items: number[]
+  /** cash carried by each bundle */
+  vals: number[]
+}
+
 /** Coal burns here; while lit, every stall sale pays a bonus. */
 export interface FurnaceSim {
   built: boolean
@@ -463,6 +480,8 @@ export interface Sim {
   /** mine-mouth coal pile: miners stack here once a Coal Carrier is hired */
   coalDepot: DepotSim
   belts: Record<BeltId, BeltSim>
+  /** cash belts share one level (0 = not built) */
+  cash: { level: number; belts: Record<StationId, CashBeltSim>; fxAcc: number; fxT: number }
   furnace: FurnaceSim
   stats: Stats
   fx: Fx[]

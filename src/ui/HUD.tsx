@@ -171,6 +171,7 @@ export function HUD() {
         <div className={`hud-objective${flash ? ' flash' : ''}`}>{objective}</div>
         <Rush />
         <Caravan />
+        <Banner />
       </div>
       <div className="hud-right">
         <div className="hud-buttons">
@@ -195,7 +196,6 @@ export function HUD() {
         <Furnace />
         <Tasks />
       </div>
-      <Banner />
     </div>
   )
 }

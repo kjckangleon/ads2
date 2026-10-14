@@ -72,7 +72,7 @@ export function DebugPanel() {
         ))}
         <button
           onClick={() => {
-            for (const id of BELT_IDS) {
+            for (const id of [...BELT_IDS, 'cash']) {
               const pad = s.pads.find((p) => p.id === `belt_${id}`)!
               if (pad.visible && !pad.locked && !pad.done) {
                 pad.level++
@@ -130,6 +130,7 @@ export function DebugPanel() {
           }),
           `log pile ${s.depot.count}/${s.depot.cap}  coal pile ${s.coalDepot.count}/${s.coalDepot.cap}`,
           `furnace ${s.furnace.built ? `fuel ${s.furnace.fuel}/${s.furnace.cap} lv${s.furnace.level} ${s.furnace.burning ? 'LIT' : 'cold'}` : 'not built'}`,
+          `cash belts L${s.cash.level}  ${STATION_IDS.map((id) => `${id}:${s.cash.belts[id].items.length}`).join(' ')}`,
           `belts ${BELT_IDS.map((id) => `${id}:${s.belts[id].level ? `L${s.belts[id].level}·${s.belts[id].items.length}` : '-'}`).join(' ')}`,
           `tasks ${s.tasks.map((t) => `${t.kind}${t.station ? `/${t.station}` : ''} ${t.need}`).join(' | ')}`,
           `tower ${s.tower.built ? `dmg${s.tower.dmgLvl} spd${s.tower.spdLvl} rng${s.tower.rngLvl}` : 'not built'}`,

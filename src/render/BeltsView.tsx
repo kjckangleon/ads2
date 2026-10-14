@@ -17,17 +17,17 @@ const TOP = 0.22
 /** world length of one chevron on the belt */
 const STRIPE = 0.5
 
-const frameMat = new THREE.MeshStandardMaterial({ color: '#4a525e', roughness: 0.6, metalness: 0.4 })
-const railMats = [
+export const frameMat = new THREE.MeshStandardMaterial({ color: '#4a525e', roughness: 0.6, metalness: 0.4 })
+export const railMats = [
   new THREE.MeshStandardMaterial({ color: '#9aa4b2', roughness: 0.4, metalness: 0.6 }),
   new THREE.MeshStandardMaterial({ color: '#7fc4e8', roughness: 0.4, metalness: 0.5 }),
   new THREE.MeshStandardMaterial({ color: '#e8bb4a', roughness: 0.35, metalness: 0.6 }),
 ]
-const legMat = new THREE.MeshStandardMaterial({ color: '#363c46', roughness: 0.7, metalness: 0.3 })
+export const legMat = new THREE.MeshStandardMaterial({ color: '#363c46', roughness: 0.7, metalness: 0.3 })
 const hopperMat = new THREE.MeshStandardMaterial({ color: '#c0563f', roughness: 0.6, metalness: 0.2 })
 
 let stripeImage: HTMLCanvasElement | null = null
-function stripeCanvas(): HTMLCanvasElement {
+export function stripeCanvas(): HTMLCanvasElement {
   if (stripeImage) return stripeImage
   const c = document.createElement('canvas')
   c.width = 64

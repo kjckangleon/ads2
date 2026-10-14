@@ -385,59 +385,59 @@ canvas {
 }
 
 .hud-banner {
-  position: absolute;
-  top: 26%;
-  left: 50%;
-  transform: translateX(-50%);
+  /* a compact toast in the top HUD stack: it never covers the player */
   text-align: center;
-  padding: 14px 26px;
-  border-radius: 18px;
-  background: rgba(14, 20, 32, 0.78);
-  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.45);
-  max-width: min(88vw, 560px);
-  animation: banner 2.9s ease-out forwards;
+  padding: 5px 14px 6px;
+  border-radius: 14px;
+  background: rgba(14, 20, 32, 0.72);
+  box-shadow: var(--shadow);
+  max-width: 100%;
+  animation: banner 2.2s ease-out forwards;
 }
 
 .hud-banner.tone-good {
-  background: rgba(40, 90, 50, 0.85);
+  background: rgba(40, 90, 50, 0.78);
 }
 
 .hud-banner.tone-warn {
-  background: rgba(100, 30, 30, 0.85);
+  background: rgba(100, 30, 30, 0.78);
 }
 
 .hud-banner-text {
   color: #fff;
-  font-size: 26px;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.01em;
 }
 
 .hud-banner-sub {
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
   font-weight: 600;
-  margin-top: 4px;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @keyframes banner {
   0% {
     opacity: 0;
-    transform: translateX(-50%) scale(0.7);
+    transform: translateY(-6px) scale(0.9);
   }
   10% {
     opacity: 1;
-    transform: translateX(-50%) scale(1.06);
+    transform: translateY(0) scale(1.04);
   }
-  16% {
-    transform: translateX(-50%) scale(1);
+  18% {
+    transform: scale(1);
   }
-  82% {
+  85% {
     opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translateX(-50%) translateY(-14px);
+    transform: translateY(-4px);
   }
 }
 
@@ -474,11 +474,11 @@ canvas {
     height: 34px;
     font-size: 15px;
   }
-  .hud-banner {
-    top: 34%;
-  }
   .hud-banner-text {
-    font-size: 21px;
+    font-size: 13px;
+  }
+  .hud-banner-sub {
+    font-size: 10px;
   }
 }
 

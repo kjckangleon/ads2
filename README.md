@@ -91,7 +91,16 @@ Once food runs itself, new pressure and new goals arrive in turn:
   the settlement grows.
 - **Conveyor belts** (Level 5+). Buy a belt and items ride on their own from
   the log pile / kitchen / tailor / smokehouse / coal pile to their stall or
-  the furnace. Upgrades speed them up; a full stall backs the line up.
+  the furnace. Upgrades speed them up; a full stall backs the line up. A belt
+  unlocks only once its chain is fully staffed (e.g. the Food Belt needs the
+  Cook, 3 Meat Collectors and 2 Food Runners), and when it's built the haulers
+  it replaces retire and their hire pad goes away.
+- **Cash belts** (after the Log + Food belts and 2 Cash Collectors). Overhead
+  money conveyors lift each stall's cash pile into the chest; the Cash
+  Collectors retire and caravan / bounty pay is banked automatically.
+- **Prerequisites.** Locked pads say what they need ("Needs Food Runner 1/2 ·
+  Cook"). The Ice Fishery needs a full Tannery crew, the Coal Mine a full
+  Fishery crew.
 - **Ice Fishery** (Level 6, northwest). Fish the holes on the frozen pond,
   smoke the catch at the Smokehouse, sell it at the Fish stall. Hire a Fisher,
   Smoker and Fish Runners.

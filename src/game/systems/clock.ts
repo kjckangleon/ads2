@@ -8,6 +8,7 @@ import { sfx } from '../audio'
 import { spawnWolf } from './wolves'
 import { addXp, banner } from './progress'
 import { requestSave } from '../saveFlag'
+import { automated } from './belts'
 
 export function startNight(sim: Sim) {
   const c = sim.clock
@@ -48,7 +49,7 @@ export function endNight(sim: Sim) {
 
 /** Raids only start once food runs itself — that's when the game needs a new threat. */
 export function nightsReady(sim: Sim) {
-  return sim.tower.built && sim.rep.level >= REP.nightsLevel && sim.workers.some((w) => w.role === 'runner')
+  return sim.tower.built && sim.rep.level >= REP.nightsLevel && automated(sim, 'runner')
 }
 
 export function updateClock(sim: Sim, dt: number) {

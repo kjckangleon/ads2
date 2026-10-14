@@ -8,10 +8,11 @@ import { RES_ICON } from '../icons'
 import { sfx } from '../audio'
 import { addXp, banner } from './progress'
 import { requestSave } from '../saveFlag'
+import { automated } from './belts'
 
 /** Traders come once the settlement is big enough and food runs itself. */
 export function caravansReady(sim: Sim) {
-  return sim.rep.level >= CARAVAN.unlockLevel && sim.workers.some((w) => w.role === 'runner')
+  return sim.rep.level >= CARAVAN.unlockLevel && automated(sim, 'runner')
 }
 
 /** world x of the sled along its road (z is fixed) */

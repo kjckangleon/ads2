@@ -22,6 +22,7 @@ import {
   furnaceCap,
   furnaceBonus,
   UNLIMITED,
+  BELT_RETIRES,
 } from '../balance'
 import { dist } from '../util'
 import { sfx, haptic } from '../audio'
@@ -29,6 +30,7 @@ import { spawnAnimal } from '../state'
 import { hireWorker } from './workers'
 import { banner } from './progress'
 import { requestSave } from '../saveFlag'
+import { automated, beltReplaces, retireWorkers } from './belts'
 
 const hasWorker = (sim: Sim, role: WorkerRole) => sim.workers.some((w) => w.role === role)
 
@@ -94,6 +96,8 @@ function padVisible(sim: Sim, pad: PadSim): boolean {
       return beltsReady(sim) && sim.zones.fishery
     case 'belt_coal':
       return beltsReady(sim) && sim.zones.mine
+    case 'belt_cash':
+      return beltsReady(sim) && s.collected >= 300
     case 'zone_fishery':
       return !sim.zones.fishery && sim.zones.tannery && sim.rep.level >= REP.fisheryLevel
     case 'fisher':
@@ -116,6 +120,23 @@ function padVisible(sim: Sim, pad: PadSim): boolean {
 }
 
 const beltsReady = (sim: Sim) => sim.rep.level >= REP.beltLevel
+
+/** "Needs Food Runner 1/2 · Cook" for the first unmet prerequisites ('' when all are met) */
+export function missingText(sim: Sim, requires: string[]): string {
+  const missing: string[] = []
+  for (const req of requires) {
+    const [id, at] = req.split('@')
+    const def = PAD_BY_ID[id]
+    const need = at ? Number(at) : def.maxLevel
+    const p = sim.pads.find((x) => x.id === id)!
+    if (p.level >= need) continue
+    missing.push(need > 1 ? `${def.label} ${p.level}/${need}` : def.label)
+  }
+  if (!missing.length) return ''
+  return `Needs ${missing.slice(0, 2).join(' · ')}${missing.length > 2 ? ' …' : ''}`
+}
+
+const RETIRABLE = new Set<string>([...Object.values(BELT_RETIRES), 'cashier'])
 
 const BELT_PADS: Record<string, BeltId> = {
   belt_wood: 'wood',
@@ -141,10 +162,12 @@ function padPreview(sim: Sim, pad: PadSim): string | null {
       return 'Build the Meat Stall'
     case 'cashier':
       return `Collect $${300 - sim.stats.collected} more`
+    case 'belt_cash':
+      return sim.stats.collected >= 300 ? `Needs ⭐ Level ${REP.beltLevel}` : null
     case 'tower':
       return sim.stations.meat.unlocked && !sim.tower.built ? 'Sell your first meat' : null
     case 'guard':
-      return hasWorker(sim, 'runner') ? 'Comes with the first night' : null
+      return automated(sim, 'runner') ? 'Comes with the first night' : null
     // tease the belts as soon as the chain exists, so players know they're coming
     case 'belt_wood':
       return hasWorker(sim, 'lumberjack') ? `Needs ⭐ Level ${REP.beltLevel}` : null
@@ -224,6 +247,7 @@ function buildBelt(sim: Sim, id: BeltId, level: number) {
   const b = sim.belts[id]
   const first = b.level === 0
   b.level = level
+  if (first) retireWorkers(sim, BELT_RETIRES[id])
   const mid = b.path[Math.floor(b.path.length / 2)]
   sim.fx.push({ t: 'burst', x: mid.x, y: 0.6, z: mid.z, color: '#cfd8e6', n: 20, spread: 2 })
   if (first) {
@@ -309,6 +333,20 @@ export function applyPad(sim: Sim, pad: PadSim) {
     case 'belt_coal':
       buildBelt(sim, BELT_PADS[pad.id], pad.level)
       break
+    case 'belt_cash': {
+      const first = sim.cash.level === 0
+      sim.cash.level = pad.level
+      const c = sim.chest.pos
+      sim.fx.push({ t: 'burst', x: c.x, y: 2, z: c.z, color: '#7fdc8f', n: 24, spread: 2 })
+      if (first) {
+        retireWorkers(sim, 'cashier')
+        sim.focus = { x: c.x, z: c.z + 2, t: 1.8 }
+        sim.fx.push({ t: 'shake', power: 0.3 })
+        banner(sim, '💸 Cash belts running!', 'Every stall\'s cash rides straight into the chest', 'good')
+      }
+      sfx.build()
+      break
+    }
     case 'kitchen_up':
       upgradeProc(sim, 'kitchen')
       break
@@ -364,6 +402,13 @@ export function updateEconomy(sim: Sim, dt: number) {
   const p = sim.player
   for (const pad of sim.pads) {
     const def = PAD_BY_ID[pad.id]
+    // a belt replaced this hire: the pad is gone for good
+    if (RETIRABLE.has(pad.id) && beltReplaces(sim, pad.id as WorkerRole)) {
+      pad.visible = false
+      pad.locked = false
+      pad.hold = 0
+      continue
+    }
     pad.done = pad.level >= def.maxLevel
     const ready = !pad.done && padVisible(sim, pad)
     pad.lockText = ready || pad.done ? '' : (padPreview(sim, pad) ?? '')
@@ -373,6 +418,8 @@ export function updateEconomy(sim: Sim, dt: number) {
       pad.hold = 0
       continue
     }
+    // prerequisites: everything a pad builds on must be fully bought first
+    if (!pad.lockText && def.requires) pad.lockText = missingText(sim, def.requires)
     const cap = def.gated ? Math.min(def.maxLevel, upgradeCap(sim.rep.level)) : def.maxLevel
     pad.locked = pad.lockText !== '' || pad.level >= cap
     pad.needLevel = pad.locked && !pad.lockText ? pad.level + 1 - REP.upgradeCapBase : 0

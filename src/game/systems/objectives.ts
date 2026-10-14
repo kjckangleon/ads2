@@ -8,6 +8,7 @@ import { WORLD, REP, CARAVAN, BELT_IDS } from '../balance'
 import { dist } from '../util'
 import { sfx } from '../audio'
 import { orderText } from './caravan'
+import { automated } from './belts'
 
 interface Objective {
   text: string | ((s: Sim) => string)
@@ -45,7 +46,7 @@ function chainTarget(s: Sim, procId: ProcessorId, stationId: StationId, runner: 
   const carry = s.player.carry
   if (carry.includes(pr.outKind)) return st.restock
   if (carry.includes(pr.inKind)) return pr.inZone
-  if (pr.outCount > 0 && !hasWorker(s, runner)) return pr.outZone
+  if (pr.outCount > 0 && !automated(s, runner)) return pr.outZone
   if (pr.inCount > 0 && !pr.staffed) return pr.workSpot
   return nearestDrop(s, pr.inKind as 'raw' | 'hide') ?? { x: WORLD.meadow.x, z: WORLD.meadow.z }
 }
@@ -82,11 +83,17 @@ function coalTarget(s: Sim): V2 | null {
   return nearestNode(s, s.seams)
 }
 
+/** "🔒 Needs Coat Runner 1/2" while a pad waits on its prerequisites */
+function padNeeds(s: Sim, id: string): string | null {
+  const p = s.pads.find((x) => x.id === id)
+  return p && p.visible && p.locked && p.lockText ? `🔒 ${p.lockText} first` : null
+}
+
 /** the cheapest belt pad that can be bought right now */
 function beltPad(s: Sim): V2 | null {
   let best: V2 | null = null
   let cost = Infinity
-  for (const id of BELT_IDS) {
+  for (const id of [...BELT_IDS, 'cash']) {
     const p = s.pads.find((x) => x.id === `belt_${id}`)
     if (p && p.visible && !p.locked && p.level === 0 && p.cost < cost) {
       cost = p.cost
@@ -126,7 +133,7 @@ export const OBJECTIVES: Objective[] = [
   },
   { text: '🪓 Hire a Lumberjack to chop for you', done: (s) => hasWorker(s, 'lumberjack'), target: padPos('lumberjack') },
   { text: '🍖 Build the Meat Stall (glowing pad)', done: (s) => s.stations.meat.unlocked, target: padPos('meatStall') },
-  { text: '🪵 Hire a Log Carrier — wood runs itself!', done: (s) => hasWorker(s, 'logCarrier'), target: padPos('logCarrier') },
+  { text: '🪵 Hire a Log Carrier — wood runs itself!', done: (s) => automated(s, 'logCarrier'), target: padPos('logCarrier') },
   {
     text: '🦌 Hunt deer (east), cook at the kitchen fire, stock the counter',
     done: (s) => s.stats.meatServed >= 3,
@@ -134,9 +141,9 @@ export const OBJECTIVES: Objective[] = [
   },
   { text: '🍳 Hire a Cook — no more standing at the fire', done: (s) => hasWorker(s, 'cook'), target: padPos('cook') },
   { text: '🧺 Hire a Meat Collector to gather the kills', done: (s) => hasWorker(s, 'collector'), target: padPos('collector') },
-  { text: '🏃 Hire a Food Runner to restock the counter', done: (s) => hasWorker(s, 'runner'), target: padPos('runner') },
+  { text: '🏃 Hire a Food Runner to restock the counter', done: (s) => automated(s, 'runner'), target: padPos('runner') },
   { text: '🏹 Build the Hunting Tower — it hunts for you', done: (s) => s.tower.built, target: padPos('tower') },
-  { text: '💰 Hire a Cash Collector to bank your cash', done: (s) => hasWorker(s, 'cashier'), target: padPos('cashier') },
+  { text: '💰 Hire a Cash Collector to bank your cash', done: (s) => automated(s, 'cashier'), target: padPos('cashier') },
   {
     text: (s) => `🔥 Never let a stall run dry — tips build a RUSH (${Math.min(s.rush.n, 10)}/10)`,
     done: (s) => s.rush.best >= 10,
@@ -176,20 +183,22 @@ export const OBJECTIVES: Objective[] = [
     target: (s) => chainTarget(s, 'tailor', 'coat', 'coatRunner'),
   },
   { text: '🧵 Hire a Tailor', done: (s) => hasWorker(s, 'tailor'), target: padPos('tailor') },
-  { text: '🧥 Hire a Coat Runner', done: (s) => hasWorker(s, 'coatRunner'), target: padPos('coatRunner') },
+  { text: '🧥 Hire a Coat Runner', done: (s) => automated(s, 'coatRunner'), target: padPos('coatRunner') },
   {
     text: (s) =>
       s.rep.level < REP.beltLevel
         ? `⭐ Reach Level ${REP.beltLevel} to build conveyor belts`
-        : '⚙️ Build a conveyor belt — it hauls on its own',
-    done: (s) => BELT_IDS.some((id) => s.belts[id].level > 0),
+        : beltPad(s)
+          ? '⚙️ Build a conveyor belt — it hauls on its own'
+          : '⚙️ Hire a full crew for a chain to unlock its belt',
+    done: (s) => s.cash.level > 0 || BELT_IDS.some((id) => s.belts[id].level > 0),
     target: beltPad,
   },
   {
     text: (s) =>
       s.rep.level < REP.fisheryLevel
         ? `⭐ Reach Level ${REP.fisheryLevel} to open the Ice Fishery`
-        : '🎣 Open the Ice Fishery (northwest)',
+        : padNeeds(s, 'zone_fishery') ?? '🎣 Open the Ice Fishery (northwest)',
     done: (s) => s.zones.fishery,
     target: padPos('zone_fishery'),
   },
@@ -200,12 +209,12 @@ export const OBJECTIVES: Objective[] = [
   },
   { text: '🔥 Hire a Smoker', done: (s) => hasWorker(s, 'smoker'), target: padPos('smoker') },
   { text: '🎣 Hire a Fisher', done: (s) => hasWorker(s, 'fisher'), target: padPos('fisher') },
-  { text: '🐟 Hire a Fish Runner', done: (s) => hasWorker(s, 'fishRunner'), target: padPos('fishRunner') },
+  { text: '🐟 Hire a Fish Runner', done: (s) => automated(s, 'fishRunner'), target: padPos('fishRunner') },
   {
     text: (s) =>
       s.rep.level < REP.mineLevel
         ? `⭐ Reach Level ${REP.mineLevel} to open the Coal Mine`
-        : '⛏️ Open the Coal Mine (north)',
+        : padNeeds(s, 'zone_mine') ?? '⛏️ Open the Coal Mine (north)',
     done: (s) => s.zones.mine,
     target: padPos('zone_mine'),
   },
@@ -215,7 +224,7 @@ export const OBJECTIVES: Objective[] = [
     target: coalTarget,
   },
   { text: '⛏️ Hire a Miner', done: (s) => hasWorker(s, 'miner'), target: padPos('miner') },
-  { text: '🪨 Hire a Coal Carrier', done: (s) => hasWorker(s, 'coalCarrier'), target: padPos('coalCarrier') },
+  { text: '🪨 Hire a Coal Carrier', done: (s) => automated(s, 'coalCarrier'), target: padPos('coalCarrier') },
   {
     // the open-ended tail: always point at the next thing worth buying
     text: (s) => {

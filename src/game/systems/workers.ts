@@ -3,7 +3,7 @@
 // travel as visible stacks. Role functions only choose sources and sinks;
 // reservations stop two workers claiming the same drop, tree or coin pile.
 
-import type { Sim, WorkerSim, WorkerRole, ResKind, ProcessorSim, ProcessorId, V2, DropSim, TreeSim, DepotSim } from '../types'
+import type { Sim, WorkerSim, WorkerRole, ResKind, ProcessorSim, ProcessorId, V2, DropSim, TreeSim, DepotSim, BeltId } from '../types'
 import { WORKERS, WORLD, GUARD, TREES, NODES, PROC_IDS, workerSpeed, workerCap, guardDamage } from '../balance'
 import { RES_NAME } from '../icons'
 import { fmt } from '../format'
@@ -303,9 +303,10 @@ interface GatherCfg {
   nodes: TreeSim[]
   kind: ResKind
   workTime: number
-  /** with a carrier hired, gatherers only stack their haul on this pile */
+  /** with a carrier hired (or the pile's belt built), gatherers only stack their haul on this pile */
   depot: DepotSim | null
   carrier: WorkerRole | null
+  belt: BeltId | null
   /** where the haul goes when nobody carries it on */
   direct: Sink
   idle: V2
@@ -319,7 +320,9 @@ function releaseNodes(nodes: TreeSim[], w: WorkerSim) {
 
 function updateGatherer(sim: Sim, w: WorkerSim, dt: number, cfg: GatherCfg) {
   const cap = capOf(sim, w.role)
-  const toPile = !!cfg.depot && !!cfg.carrier && sim.workers.some((x) => x.role === cfg.carrier)
+  const toPile =
+    !!cfg.depot &&
+    ((!!cfg.belt && sim.belts[cfg.belt].level > 0) || (!!cfg.carrier && sim.workers.some((x) => x.role === cfg.carrier)))
   const sink = toPile ? depotSink(cfg.depot!, `stacking ${RES_NAME[cfg.kind]}`) : cfg.direct
 
   if (w.mode === 'deliver') {
@@ -406,6 +409,7 @@ const lumberjack = (sim: Sim, w: WorkerSim, dt: number) =>
     workTime: WORKERS.lumberjackChopTime,
     depot: sim.depot,
     carrier: 'logCarrier',
+    belt: 'wood',
     direct: stationSink(sim, 'wood'),
     idle: { x: WORLD.treeArea.x + 6, z: WORLD.treeArea.z + 5 },
     verb: 'chopping',
@@ -419,6 +423,7 @@ const fisher = (sim: Sim, w: WorkerSim, dt: number) =>
     workTime: WORKERS.fisherTime,
     depot: null,
     carrier: null,
+    belt: null,
     direct: procInSink(sim.proc.smokehouse),
     idle: { x: WORLD.pond.x + WORLD.pond.rx + 1, z: WORLD.pond.z + 1 },
     verb: 'fishing',
@@ -432,6 +437,7 @@ const miner = (sim: Sim, w: WorkerSim, dt: number) =>
     workTime: WORKERS.minerTime,
     depot: sim.coalDepot,
     carrier: 'coalCarrier',
+    belt: 'coal',
     direct: furnaceSink(sim),
     idle: { x: WORLD.coalDepot.x - 2, z: WORLD.coalDepot.z - 1.5 },
     verb: 'mining coal',

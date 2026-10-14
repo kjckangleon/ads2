@@ -6,6 +6,7 @@ import {
   PROC_IDS,
   ZONE_IDS,
   BELT_IDS,
+  BELT_RETIRES,
   CLOCK,
   CARAVAN,
   ECONOMY,
@@ -21,6 +22,7 @@ import {
 } from './balance'
 import { hireWorker } from './systems/workers'
 import { levelFromTotalXp } from './systems/progress'
+import { retireWorkers } from './systems/belts'
 
 const KEY = 'frostline-save-v1'
 
@@ -82,7 +84,14 @@ export function saveNow(sim: Sim) {
       workers: sim.workers.map((w) => w.role),
       player: { spdLvl: sim.player.spdLvl, carryLvl: sim.player.carryLvl, powerLvl: sim.player.powerLvl },
       pads: Object.fromEntries(sim.pads.map((p) => [p.id, { level: p.level, paid: p.paid }])),
-      piles: Object.fromEntries(sim.piles.map((p) => [p.id, p.value])),
+      // cash riding a belt goes back on its pile so none is lost
+      piles: Object.fromEntries(
+        sim.piles.map((p) => {
+          let v = p.value
+          for (const id of STATION_IDS) if (sim.stations[id].payPileId === p.id) for (const c of sim.cash.belts[id].vals) v += c
+          return [p.id, v]
+        }),
+      ),
       rep: { ...sim.rep },
       // a save taken mid-raid resumes at the start of that night's dusk
       clock: { enabled: sim.clock.enabled, t: sim.clock.night ? CLOCK.dayLength - 15 : sim.clock.t, day: sim.clock.day },
@@ -225,7 +234,12 @@ function apply(sim: Sim, d: SaveV2) {
 
   sim.tasks = (d.tasks ?? []).map((t) => ({ ...t, id: sim.ids++ }))
 
+  sim.cash.level = d.pads.belt_cash?.level ?? 0
+
   for (const role of d.workers) hireWorker(sim, role)
+  // haulers a belt has replaced don't come back
+  for (const id of BELT_IDS) if (sim.belts[id].level > 0) retireWorkers(sim, BELT_RETIRES[id], true)
+  if (sim.cash.level > 0) retireWorkers(sim, 'cashier', true)
 }
 
 export function loadSave(sim: Sim): boolean {

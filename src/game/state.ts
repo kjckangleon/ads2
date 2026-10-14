@@ -13,6 +13,7 @@ import type {
   CustomerSim,
   BeltId,
   BeltSim,
+  CashBeltSim,
   V2,
 } from './types'
 import {
@@ -25,6 +26,8 @@ import {
   SEAM_SPOTS,
   BELT_IDS,
   BELT_CFG,
+  CASH_PATHS,
+  STATION_IDS,
   ANIMALS,
   CARAVAN,
   CUSTOMERS,
@@ -151,6 +154,19 @@ function makeBelt(id: BeltId): BeltSim {
   }
 }
 
+/** vertical distance a cash bundle climbs off the pile (and drops into the chest) */
+export const CASH_LIFT = 2.9
+
+function makeCashBelt(id: StationId): CashBeltSim {
+  const path = CASH_PATHS[id].map((p) => ({ x: p.x, z: p.z }))
+  const dists = [0]
+  for (let i = 1; i < path.length; i++) {
+    dists.push(dists[i - 1] + Math.hypot(path[i].x - path[i - 1].x, path[i].z - path[i - 1].z))
+  }
+  const run = dists[dists.length - 1]
+  return { station: id, path, dists, run, length: run + CASH_LIFT * 2, items: [], vals: [] }
+}
+
 export function spawnAnimal(sim: Sim, kind: AnimalKind): AnimalSim {
   const m = WORLD.meadow
   const ang = Math.random() * Math.PI * 2
@@ -272,6 +288,12 @@ export function createSim(): Sim {
     depot: { pos: { x: WORLD.logDepot.x, z: WORLD.logDepot.z }, count: 0, cap: WORKERS.depotCap, kind: 'log' },
     coalDepot: { pos: { x: WORLD.coalDepot.x, z: WORLD.coalDepot.z }, count: 0, cap: WORKERS.coalDepotCap, kind: 'coal' },
     belts: Object.fromEntries(BELT_IDS.map((id) => [id, makeBelt(id)])) as Record<BeltId, BeltSim>,
+    cash: {
+      level: 0,
+      belts: Object.fromEntries(STATION_IDS.map((id) => [id, makeCashBelt(id)])) as Record<StationId, CashBeltSim>,
+      fxAcc: 0,
+      fxT: 0,
+    },
     furnace: {
       built: false,
       pos: { x: WORLD.furnace.x, z: WORLD.furnace.z },

@@ -4,10 +4,11 @@
 import type { Sim, BannerTone } from '../types'
 import { REP, RUSH, CARAVAN, WORLD, ANIMALS, TASKS, STATION_SCALE, xpForLevel, upgradeCap, levelGift, maxDemand } from '../balance'
 import { fmt } from '../format'
+import { automated } from './belts'
 import { sfx } from '../audio'
 import { requestSave } from '../saveFlag'
 
-const BANNER_TIME = 2.9
+const BANNER_TIME = 2.2
 let bannerSeq = 0
 
 export function banner(sim: Sim, text: string, sub = '', tone: BannerTone = 'info') {
@@ -31,7 +32,7 @@ export function updateBanners(sim: Sim, dt: number) {
 
 function perksFor(sim: Sim, lvl: number): string {
   const out: string[] = []
-  const foodAutomated = sim.workers.some((w) => w.role === 'runner')
+  const foodAutomated = automated(sim, 'runner')
   if (lvl === CARAVAN.unlockLevel) out.push(foodAutomated ? '🛷 trade caravans' : '🛷 caravans once food runs itself')
   if (lvl === REP.tanneryLevel) out.push('🧥 Tannery for sale')
   if (lvl === REP.beltLevel) out.push('⚙️ conveyor belts · 🐐 mountain goats')

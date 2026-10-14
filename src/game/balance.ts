@@ -455,6 +455,49 @@ export const BELT_CFG: Record<BeltId, { kind: ResKind; path: V2[] }> = {
   },
 }
 
+/** a belt takes over its haulers' job: they retire and their hire pad goes away */
+export const BELT_RETIRES: Record<BeltId, WorkerRole> = {
+  wood: 'logCarrier',
+  meat: 'runner',
+  coat: 'coatRunner',
+  fish: 'fishRunner',
+  coal: 'coalCarrier',
+}
+
+// ---- cash belts: overhead money conveyors from each stall's pay pile to the chest ----
+
+export const CASH_BELT = {
+  /** height the bundles ride at (clears the stall roofs) */
+  height: 3.4,
+  /** each bundle takes this share of the pile (at least one bill) */
+  chunkFrac: 0.12,
+  /** caravan + wolf-bounty piles are banked directly at this rate once belts run */
+  bankRate: 400,
+}
+
+/** the chest's intakes: W wood, E meat, S coat, N fish */
+export const CASH_PATHS: Record<StationId, V2[]> = {
+  wood: [
+    { x: -6.7, z: 2.6 },
+    { x: -3.85, z: 0.2 },
+  ],
+  meat: [
+    { x: 6.7, z: 2.6 },
+    { x: -1.35, z: 0.2 },
+  ],
+  coat: [
+    { x: 22.7, z: 9.6 },
+    { x: 12.0, z: 9.6 },
+    { x: -2.6, z: 5.2 },
+    { x: -2.6, z: 1.45 },
+  ],
+  fish: [
+    { x: -26.7, z: 4.6 },
+    { x: -14.0, z: -1.05 },
+    { x: -2.6, z: -1.05 },
+  ],
+}
+
 export function beltSpeed(level: number) {
   return BELT.speed + BELT.speedPerLvl * Math.max(0, level - 1)
 }
@@ -598,6 +641,8 @@ export interface PadDef {
   maxLevel: number
   /** max level is also limited by settlement level (see upgradeCap) */
   gated?: boolean
+  /** pads that must be fully bought before this one unlocks ('id@n' = just level n) */
+  requires?: string[]
 }
 
 export const PAD_DEFS: PadDef[] = [
@@ -634,23 +679,24 @@ export const PAD_DEFS: PadDef[] = [
   { id: 'coat_up', x: 27.8, z: 11.5, label: 'Coat Stall +', icon: '⬆️', baseCost: 800, costMult: 1.6, maxLevel: 10, gated: true },
   { id: 'tailor_up', x: 31.5, z: -2.6, label: 'Tailor +', icon: '⬆️', baseCost: 900, costMult: 1.6, maxLevel: 10, gated: true },
   // conveyor belts (Level 5+): build, then speed them up
-  { id: 'belt_wood', x: -7.6, z: -7.6, label: 'Log Belt', icon: '⚙️', baseCost: 4000, costMult: 2.2, maxLevel: 3 },
-  { id: 'belt_meat', x: 13.6, z: 1.7, label: 'Food Belt', icon: '⚙️', baseCost: 5500, costMult: 2.2, maxLevel: 3 },
-  { id: 'belt_coat', x: 31.7, z: 1.1, label: 'Coat Belt', icon: '⚙️', baseCost: 8000, costMult: 2.2, maxLevel: 3 },
+  { id: 'belt_wood', x: -7.6, z: -7.6, label: 'Log Belt', icon: '⚙️', baseCost: 4000, costMult: 2.2, maxLevel: 3, requires: ['lumberjack', 'logCarrier'] },
+  { id: 'belt_meat', x: 13.6, z: 1.7, label: 'Food Belt', icon: '⚙️', baseCost: 5500, costMult: 2.2, maxLevel: 3, requires: ['cook', 'collector', 'runner'] },
+  { id: 'belt_coat', x: 31.7, z: 1.1, label: 'Coat Belt', icon: '⚙️', baseCost: 8000, costMult: 2.2, maxLevel: 3, requires: ['tailor', 'coatRunner'] },
+  { id: 'belt_cash', x: -6.6, z: -1.6, label: 'Cash Belt', icon: '💸', baseCost: 6000, costMult: 2.2, maxLevel: 3, requires: ['cashier', 'belt_wood@1', 'belt_meat@1'] },
   // ice fishery (Level 6)
-  { id: 'zone_fishery', x: -11.0, z: -11.3, label: 'Open Ice Fishery', icon: '🎣', baseCost: 15000, costMult: 1, maxLevel: 1 },
+  { id: 'zone_fishery', x: -11.0, z: -11.3, label: 'Open Ice Fishery', icon: '🎣', baseCost: 15000, costMult: 1, maxLevel: 1, requires: ['tailor', 'coatRunner'] },
   { id: 'fisher', x: -12.6, z: -17.6, label: 'Fisher', icon: '🎣', baseCost: 5000, costMult: 2, maxLevel: 3 },
   { id: 'smoker', x: -31.6, z: -9.4, label: 'Smoker', icon: '🔥', baseCost: 6000, costMult: 1, maxLevel: 1 },
   { id: 'fishRunner', x: -24.2, z: 6.8, label: 'Fish Runner', icon: '🏃', baseCost: 6500, costMult: 1.9, maxLevel: 2 },
   { id: 'fish_up', x: -31.8, z: 6.6, label: 'Fish Stall +', icon: '⬆️', baseCost: 1600, costMult: 1.6, maxLevel: 10, gated: true },
   { id: 'smoke_up', x: -32.2, z: -1.6, label: 'Smokehouse +', icon: '⬆️', baseCost: 1800, costMult: 1.6, maxLevel: 10, gated: true },
-  { id: 'belt_fish', x: -24.4, z: 0.6, label: 'Fish Belt', icon: '⚙️', baseCost: 11000, costMult: 2.2, maxLevel: 3 },
+  { id: 'belt_fish', x: -24.4, z: 0.6, label: 'Fish Belt', icon: '⚙️', baseCost: 11000, costMult: 2.2, maxLevel: 3, requires: ['fisher', 'smoker', 'fishRunner'] },
   // coal mine (Level 8)
-  { id: 'zone_mine', x: 7.2, z: -11.5, label: 'Open Coal Mine', icon: '⛏️', baseCost: 40000, costMult: 1, maxLevel: 1 },
+  { id: 'zone_mine', x: 7.2, z: -11.5, label: 'Open Coal Mine', icon: '⛏️', baseCost: 40000, costMult: 1, maxLevel: 1, requires: ['fisher', 'smoker', 'fishRunner'] },
   { id: 'miner', x: 8.6, z: -17.6, label: 'Miner', icon: '⛏️', baseCost: 12000, costMult: 2, maxLevel: 3 },
   { id: 'coalCarrier', x: -5.3, z: -12.0, label: 'Coal Carrier', icon: '🪨', baseCost: 14000, costMult: 1.9, maxLevel: 2 },
   { id: 'furnace_up', x: -1.9, z: -11.2, label: 'Furnace +', icon: '⬆️', baseCost: 6000, costMult: 1.6, maxLevel: 10, gated: true },
-  { id: 'belt_coal', x: 8.4, z: -10.6, label: 'Coal Belt', icon: '⚙️', baseCost: 16000, costMult: 2.2, maxLevel: 3 },
+  { id: 'belt_coal', x: 8.4, z: -10.6, label: 'Coal Belt', icon: '⚙️', baseCost: 16000, costMult: 2.2, maxLevel: 3, requires: ['miner', 'coalCarrier'] },
 ]
 
 export const PAD_BY_ID: Record<string, PadDef> = Object.fromEntries(PAD_DEFS.map((d) => [d.id, d]))
