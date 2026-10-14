@@ -198,7 +198,10 @@ products that vehicles come to buy. The frozen camp becomes its supply chain.
   show in a small pill while you're in the park.
 - Freight cash rides overhead cash belts into the park's 🏦 Vault. Terminal
   upgrades (Truck Depot + / Port + / Airport +) raise prices, load speed,
-  storage and vehicle frequency. Ships first dispatch after 3 seconds and planes
+  storage, vehicle cargo capacity and frequency. Each terminal upgrade adds 20%
+  of the baseline cargo capacity to newly dispatched trucks, ships and planes,
+  including past Lv10; active orders keep their current size. Large ship/plane
+  orders receive enough loading time to complete. Ships first dispatch after 3 seconds and planes
   after 2 seconds; return waits are 15 / 12 seconds, improving to 6 / 5 seconds
   with terminal upgrades. Travel time is additional. The park HUD shows the next
   dispatch countdown and inbound ETA as well as active orders.

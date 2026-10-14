@@ -1093,6 +1093,8 @@ export const FREIGHT = {
   baseLoad: 0.22,
   loadMult: 0.9,
   minLoad: 0.03,
+  /** Additional share of baseline vehicle capacity per terminal upgrade. */
+  orderCapacityPerLevel: 0.2,
   truck: {
     slots: 6,
     every: 7,
@@ -1123,6 +1125,11 @@ export function terminalLoadTime(level: number) {
 }
 export function freightPrice(kind: ResKind, level: number) {
   return Math.round((FREIGHT.price[kind] ?? 0) * Math.pow(FREIGHT.priceMult, level))
+}
+
+/** Scale both ordinary orders and their late-game ceiling with terminal upgrades. */
+export function freightOrderCapacity(baseOrder: number, baseMax: number, terminalLevel: number) {
+  return Math.round(Math.min(baseMax, baseOrder) * (1 + FREIGHT.orderCapacityPerLevel * terminalLevel))
 }
 
 // ---- derived stat helpers (used by upgrades AND save-load reconstruction) ----
