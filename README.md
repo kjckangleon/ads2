@@ -15,6 +15,8 @@ npm install
 npm run dev        # dev server (has debug panel + window.__ff fast-forward)
 npm run build      # production build (debug excluded)
 npm run preview    # serve the production build
+npm run typecheck  # check TypeScript
+npm test           # save, progression, freight and settlement regression tests
 ```
 
 **Always the latest build on phones.** Every build writes `dist/version.json`
@@ -107,8 +109,8 @@ Once food runs itself, new pressure and new goals arrive in turn:
   log pile), 🔪 Skinning Machine (Meat Collectors: pulls in every kill, meat →
   kitchen, hides → tailor), 🌀 Ice Auger (Fishers, fish → smokehouse),
   ⛏️ Coal Drill (Miners, coal → coal pile) and 🤖 automatons that run the
-  kitchen, tailor bench and smokehouse (Cook, Tailor, Smoker). Upgrades make
-  them faster. The Hunting Tower is the hunting machine; Guards stay human.
+  kitchen, tailor bench and smokehouse (Cook, Tailor, Smoker). Upgrades stay available beyond Lv3 (capped by settlement level) and make
+  gathering, cooking and smoking faster. Camp delivery belts also keep upgrading. The Hunting Tower is the hunting machine; Guards stay human.
 - **Cash belts** (after the Log + Food belts and 2 Cash Collectors). Overhead
   money conveyors lift each stall's cash pile into the chest, and two more
   carry the Great Furnace's heat money and wolf bounties (riding higher, over
@@ -121,7 +123,7 @@ Once food runs itself, new pressure and new goals arrive in turn:
   the entry road lets you start a fresh camp for ❄️ Frost Stars
   (√(sales this run / 25K)). Stand on it 3 s to confirm. Each star is
   permanent: +10% sales, +2% worker speed (up to +60%), +$1K starting cash
-  and better offline earnings.
+  and better offline earnings. The new camp starts directly after the moving animation; no page reload is required.
 - **Offline earnings.** Close the game (or leave it in the background) and
   your crew keeps earning: 40% of your recent income rate (+3% per Frost Star)
   for up to 8 hours, collected from a "While you were away" popup, with a free
@@ -192,11 +194,14 @@ products that vehicles come to buy. The frozen camp becomes its supply chain.
   Airport. Before they're built, carry products there yourself.
 - **Trucks** queue along the depot road and leave once their order is
   loaded. **Ships** and **planes** bring big orders with a timer: fill the
-  whole order for a 60% / 100% bonus, or they leave half full. Their orders
+  whole order for a 100% / 150% bonus, or they leave half full. Their orders
   show in a small pill while you're in the park.
 - Freight cash rides overhead cash belts into the park's 🏦 Vault. Terminal
   upgrades (Truck Depot + / Port + / Airport +) raise prices, load speed,
-  storage and how often trucks come.
+  storage and vehicle frequency. Ships first dispatch after 3 seconds and planes
+  after 2 seconds; return waits are 15 / 12 seconds, improving to 6 / 5 seconds
+  with terminal upgrades. Travel time is additional. The park HUD shows the next
+  dispatch countdown and inbound ETA as well as active orders.
 - The objective track, the task board (load trucks, ships, planes) and the
   level-up messages cover the park too. Moving the Settlement resets it with
   everything else.
@@ -220,7 +225,9 @@ raiding wolf (red), a waiting caravan (teal) and where your load goes (blue).
 - **Balance** (`src/game/balance.ts`): every tuning number in one file,
   including derived-stat helpers shared by upgrades and the save loader.
 - **Save** (`src/game/save.ts`): LocalStorage, autosave every 5 s + on purchase.
-  Format v2; v1 saves migrate automatically (lifetime serves → settlement XP).
+  Format v3; v1/v2 saves migrate automatically (XP and economy scaling).
+  The player's backpack and unclaimed offline earnings survive a refresh;
+  claiming a reward immediately saves its cash and daily-double status.
 - Physics: intentionally none (proximity checks, circle and box push-out),
   which is cheaper on phones than Rapier for this design; Rapier can be added
   later for ragdolls.

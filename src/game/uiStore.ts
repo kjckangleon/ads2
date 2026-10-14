@@ -3,7 +3,7 @@ import { create } from 'zustand'
 export type Quality = 'low' | 'medium' | 'high'
 
 function autoQuality(): Quality {
-  if (typeof navigator === 'undefined') return 'high'
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') return 'high'
   const touch = 'ontouchstart' in window
   // WebKit (every iOS browser, Edge and Chrome included) under-reports
   // hardwareConcurrency, so the core count says nothing about an iPhone's GPU.
@@ -37,6 +37,7 @@ export interface NoticeView {
 export type Panel = '' | 'alerts' | 'tasks' | 'shop'
 
 export interface UIState {
+  settlementRun: number
   money: number
   objectiveText: string
   objectiveFlash: boolean
@@ -102,6 +103,7 @@ export interface UIState {
 }
 
 export const useUI = create<UIState>((set) => ({
+  settlementRun: 0,
   money: 0,
   objectiveText: '',
   objectiveFlash: false,

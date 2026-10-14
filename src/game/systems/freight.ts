@@ -37,7 +37,7 @@ function truckLeaveRoute(): RoutePt[] {
 
 function shipArriveRoute(): RoutePt[] {
   const b = PARK.berth
-  return [pt(130, 90, 10), pt(60, 80, 8), pt(b.x + 4, b.z, 4), pt(b.x, b.z, 2)]
+  return [pt(60, 80, 10), pt(b.x + 4, b.z, 4), pt(b.x, b.z, 2)]
 }
 function shipLeaveRoute(): RoutePt[] {
   const b = PARK.berth
@@ -288,7 +288,7 @@ export function updateFreight(sim: Sim, dt: number) {
   if (port.open && !has('ship')) {
     f.shipT -= dt
     if (f.shipT <= 0) {
-      f.shipT = SHIP.every
+      f.shipT = Math.max(SHIP.minEvery, SHIP.every * Math.pow(0.9, port.level))
       const v = newVehicle(sim, 'ship', shipArriveRoute())
       v.order = shipOrder(sim)
       banner(sim, '🚢 Cargo ship inbound', `Wants ${orderLine(v.order)} at the Port`, 'info')
@@ -297,7 +297,7 @@ export function updateFreight(sim: Sim, dt: number) {
   if (air.open && !has('plane')) {
     f.planeT -= dt
     if (f.planeT <= 0) {
-      f.planeT = PLANE.every
+      f.planeT = Math.max(PLANE.minEvery, PLANE.every * Math.pow(0.9, air.level))
       const v = newVehicle(sim, 'plane', planeArriveRoute())
       v.order = planeOrder(sim)
       banner(sim, '✈️ Cargo plane landing', `Wants ${orderLine(v.order)} at the Airport`, 'info')
@@ -318,7 +318,18 @@ export function updateFreight(sim: Sim, dt: number) {
 
 /** HUD pill text for the docked ship / parked plane */
 export function bigOrderView(sim: Sim, kind: 'ship' | 'plane') {
-  const v = sim.freight.vehicles.find((x) => x.kind === kind && x.state === 'load')
-  if (!v) return { text: '', frac: 0, time: 0 }
+  const terminal = kind === 'ship' ? sim.terminals.port : sim.terminals.air
+  if (!terminal.open) return { text: '', frac: 0, time: 0 }
+  const v = sim.freight.vehicles.find((x) => x.kind === kind && x.state !== 'leave')
+  if (!v) return { text: 'Next dispatch', frac: 0, time: Math.ceil(kind === 'ship' ? sim.freight.shipT : sim.freight.planeT) }
+  if (v.state === 'arrive') {
+    let seconds = 0
+    let from = { ...v.pos, y: v.y }
+    for (const to of v.route.slice(v.seg)) {
+      seconds += Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) / to.v
+      from = to
+    }
+    return { text: 'Arriving', frac: 0, time: Math.ceil(seconds) }
+  }
   return { text: orderLine(v.order), frac: v.timer / v.maxTimer, time: Math.ceil(v.timer) }
 }

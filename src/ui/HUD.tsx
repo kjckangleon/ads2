@@ -86,7 +86,7 @@ function FreightOrders() {
   const planeText = useUI((s) => s.planeText)
   const planeTime = useUI((s) => s.planeTime)
   if (!inPark || (!shipText && !planeText)) return null
-  const urgent = (shipText && shipTime <= 10) || (planeText && planeTime <= 10)
+  const urgent = (shipText.includes('/') && shipTime <= 10) || (planeText.includes('/') && planeTime <= 10)
   return (
     <div className={`hud-freight${urgent ? ' urgent' : ''}`}>
       {shipText && (

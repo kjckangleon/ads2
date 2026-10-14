@@ -101,7 +101,13 @@ function beltEnds(sim: Sim, id: BeltId): { src: Source; sink: Sink } {
  * of only their share of what's hauled off it (more with upgrades), plus
  * anything that piles up because nobody else is taking it.
  */
-const exportShare: Partial<Record<BeltId, { ex: number; all: number; seen: number }>> = {}
+type ExportShares = Partial<Record<BeltId, { ex: number; all: number; seen: number }>>
+const settlementShares = new WeakMap<Sim, ExportShares>()
+function sharesFor(sim: Sim): ExportShares {
+  let shares = settlementShares.get(sim)
+  if (!shares) { shares = {}; settlementShares.set(sim, shares) }
+  return shares
+}
 
 function exportAllowed(sim: Sim, id: BeltId, srcCount: number, dt: number): boolean {
   const b = sim.belts[id]
@@ -114,7 +120,7 @@ function exportAllowed(sim: Sim, id: BeltId, srcCount: number, dt: number): bool
           ? sim.proc.tailor.taken
           : sim.proc.smokehouse.taken
   const now = total ?? 0
-  const st = (exportShare[id] ??= { ex: 0, all: 0, seen: now })
+  const st = (sharesFor(sim)[id] ??= { ex: 0, all: 0, seen: now })
   st.all += Math.max(0, now - st.seen)
   st.seen = now
   // forget slowly, so the split follows what's happening now
@@ -125,8 +131,8 @@ function exportAllowed(sim: Sim, id: BeltId, srcCount: number, dt: number): bool
   return srcCount >= FREIGHT.exportOverflow || st.ex <= share * st.all + 0.5
 }
 
-function noteExport(id: BeltId) {
-  const st = exportShare[id]
+function noteExport(sim: Sim, id: BeltId) {
+  const st = sharesFor(sim)[id]
   if (st) st.ex++
 }
 
@@ -291,7 +297,7 @@ function updateBelt(sim: Sim, id: BeltId, dt: number) {
   if (src.open && src.count > 0 && last >= BELT.spacing) {
     src.take()
     items.push(0)
-    if (exp) noteExport(id)
+    if (exp) noteExport(sim, id)
   }
 }
 

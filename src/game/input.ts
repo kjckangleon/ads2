@@ -17,6 +17,11 @@ if (typeof window !== 'undefined' && import.meta.env.DEV) (window as any).__inpu
 
 const held = new Set<string>()
 
+export function resetInput() {
+  held.clear()
+  input.kx = input.kz = input.jx = input.jz = input.x = input.z = 0
+}
+
 function recompute() {
   let x = 0
   let z = 0

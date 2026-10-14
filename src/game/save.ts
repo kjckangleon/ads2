@@ -41,6 +41,7 @@ import { hireWorker } from './systems/workers'
 import { levelFromTotalXp } from './systems/progress'
 import { retireWorkers } from './systems/belts'
 import { openParkStage } from './systems/economy'
+import { RES_NAME } from './icons'
 
 const KEY = 'frostline-save-v1'
 
@@ -53,7 +54,7 @@ interface SaveV2 {
   proc: Partial<Record<ProcessorId, { level: number; inCount: number; outCount: number; unlocked: boolean }>>
   tower: { built: boolean; dmgLvl: number; spdLvl: number; rngLvl: number }
   workers: WorkerRole[]
-  player: { spdLvl: number; carryLvl: number; powerLvl?: number }
+  player: { spdLvl: number; carryLvl: number; powerLvl?: number; carry?: ResKind[] }
   pads: Record<string, { level: number; paid: number }>
   piles: Partial<Record<PileId, number>>
   rep: { xp: number; level: number }
@@ -71,6 +72,7 @@ interface SaveV2 {
   meta?: Partial<MetaSim>
   incomeRate?: number
   savedAt?: number
+  offline?: Sim['offline']
   /** Industrial Park terminal stock (levels and stages come back from the pads) */
   terminals?: Partial<Record<TerminalId, Partial<Record<ResKind, number>>>>
   freight?: { trucks: number; ships: number; planes: number }
@@ -127,7 +129,12 @@ export function saveNow(sim: Sim) {
         rngLvl: sim.tower.rngLvl,
       },
       workers: sim.workers.map((w) => w.role),
-      player: { spdLvl: sim.player.spdLvl, carryLvl: sim.player.carryLvl, powerLvl: sim.player.powerLvl },
+      player: {
+        spdLvl: sim.player.spdLvl,
+        carryLvl: sim.player.carryLvl,
+        powerLvl: sim.player.powerLvl,
+        carry: [...sim.player.carry],
+      },
       pads: Object.fromEntries(sim.pads.map((p) => [p.id, { level: p.level, paid: p.paid }])),
       // cash riding a belt goes back on its pile so none is lost
       piles: Object.fromEntries(
@@ -168,6 +175,7 @@ export function saveNow(sim: Sim) {
       meta: { ...sim.meta },
       incomeRate: sim.incomeRate,
       savedAt: Date.now(),
+      offline: sim.offline ? { ...sim.offline } : null,
       terminals: Object.fromEntries(TERMINAL_IDS.map((id) => [id, { ...sim.terminals[id].stock }])),
       freight: { trucks: sim.freight.trucks, ships: sim.freight.ships, planes: sim.freight.planes },
     }
@@ -258,6 +266,9 @@ function apply(sim: Sim, d: SaveV2) {
   sim.player.powerLvl = d.player.powerLvl ?? 0
   sim.player.speed = playerSpeed(sim.player.spdLvl)
   sim.player.carryCap = playerCarry(sim.player.carryLvl)
+  sim.player.carry = Array.isArray(d.player.carry)
+    ? d.player.carry.filter((k) => Object.prototype.hasOwnProperty.call(RES_NAME, k)).slice(0, sim.player.carryCap)
+    : []
 
   for (const pad of sim.pads) {
     const pv = d.pads[pad.id]
@@ -311,6 +322,11 @@ function apply(sim: Sim, d: SaveV2) {
   sim.rateEarned = sim.stats.earned
   // the first tick compares against this and pays out the time away
   sim.lastWall = d.savedAt ?? 0
+  const offline = d.offline
+  sim.offline = offline && Number.isFinite(offline.amount) && offline.amount > 0 &&
+    Number.isFinite(offline.seconds) && offline.seconds >= 0
+    ? { amount: Math.floor(offline.amount), seconds: offline.seconds }
+    : null
 
   // Industrial Park: stages, belts and terminal upgrades come back from their pads
   if (sim.zones.industry) openParkStage(sim, 'industry', true)
