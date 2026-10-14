@@ -5,13 +5,14 @@ import { useEffect, useState } from 'react'
 import { sim, spawnAnimal } from '../game/state'
 import { useUI, type Quality } from '../game/uiStore'
 import { clearSave } from '../game/save'
-import { STATION_IDS, PROC_IDS, ZONE_IDS, BELT_IDS, xpForLevel, capText } from '../game/balance'
+import { STATION_IDS, PROC_IDS, ZONE_IDS, BELT_IDS, MACHINE_IDS, xpForLevel, capText } from '../game/balance'
 import { queueLength } from '../game/systems/customers'
 import { addXp } from '../game/systems/progress'
 import { startNight, endNight } from '../game/systems/clock'
 import { spawnWolf } from '../game/systems/wolves'
 import { summonCaravan } from '../game/systems/caravan'
 import { applyPad } from '../game/systems/economy'
+import { moveSettlement } from '../game/systems/meta'
 
 export function DebugPanel() {
   const open = useUI((s) => s.debugOpen)
@@ -39,6 +40,11 @@ export function DebugPanel() {
         <button onClick={() => addXp(s, xpForLevel(s.rep.level) - s.rep.xp)}>+1 ⭐</button>
         <button onClick={() => (s.spawnT = 0.01)}>+customer</button>
         <button onClick={() => spawnAnimal(s, 'deer')}>+deer</button>
+      </div>
+      <div className="debug-row">
+        <button onClick={() => (s.lastWall -= 2 * 3600 * 1000)}>away 2h</button>
+        <button onClick={() => (s.stats.earned += 1e6)}>+1M earned</button>
+        <button onClick={() => moveSettlement(s)}>move now</button>
       </div>
       <div className="debug-row">
         <button
@@ -72,8 +78,8 @@ export function DebugPanel() {
         ))}
         <button
           onClick={() => {
-            for (const id of [...BELT_IDS, 'cash']) {
-              const pad = s.pads.find((p) => p.id === `belt_${id}`)!
+            for (const id of [...BELT_IDS, 'cash', ...MACHINE_IDS.map((m) => `m:${m}`)]) {
+              const pad = s.pads.find((p) => p.id === (id.startsWith('m:') ? `m_${id.slice(2)}` : `belt_${id}`))!
               if (pad.visible && !pad.locked && !pad.done) {
                 pad.level++
                 pad.done = pad.level >= pad.maxLevel
@@ -82,7 +88,7 @@ export function DebugPanel() {
             }
           }}
         >
-          +belts
+          +belts & machines
         </button>
       </div>
       <div className="debug-row">
@@ -117,6 +123,7 @@ export function DebugPanel() {
       </div>
       <pre className="debug-info">
         {[
+          `❄️ ${s.meta.stars} stars  runs ${s.meta.runs}  income ${Math.round(s.incomeRate)}/s`,
           `money ${Math.floor(s.money)}  obj ${s.objective}  ⭐${s.rep.level} (${s.rep.xp}/${xpForLevel(s.rep.level)})`,
           `rush ${s.rush.n} (best ${s.rush.best})  tips ${s.stats.tips}  angry ${s.stats.angry}  vips ${s.stats.vips}`,
           `clock ${s.clock.enabled ? `${s.clock.night ? 'night' : 'day'} ${s.clock.day} t${s.clock.t.toFixed(0)}` : 'off'}  raids ${s.raid.count} stolen ${s.raid.stolen}`,
@@ -131,6 +138,7 @@ export function DebugPanel() {
           `log pile ${s.depot.count}/${s.depot.cap}  coal pile ${s.coalDepot.count}/${s.coalDepot.cap}`,
           `furnace ${s.furnace.built ? `fuel ${s.furnace.fuel}/${s.furnace.cap} lv${s.furnace.level} ${s.furnace.burning ? 'LIT' : 'cold'}` : 'not built'}`,
           `cash belts L${s.cash.level}  ${STATION_IDS.map((id) => `${id}:${s.cash.belts[id].items.length}`).join(' ')}`,
+          `machines ${MACHINE_IDS.map((id) => `${id}:${s.machines[id].level ? `L${s.machines[id].level}${s.machines[id].active ? '*' : ''}` : '-'}`).join(' ')}`,
           `belts ${BELT_IDS.map((id) => `${id}:${s.belts[id].level ? `L${s.belts[id].level}·${s.belts[id].items.length}` : '-'}`).join(' ')}`,
           `tasks ${s.tasks.map((t) => `${t.kind}${t.station ? `/${t.station}` : ''} ${t.need}`).join(' | ')}`,
           `tower ${s.tower.built ? `dmg${s.tower.dmgLvl} spd${s.tower.spdLvl} rng${s.tower.rngLvl}` : 'not built'}`,

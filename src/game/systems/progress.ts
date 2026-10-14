@@ -2,7 +2,7 @@
 // big centre-screen announcement queue.
 
 import type { Sim, BannerTone } from '../types'
-import { REP, RUSH, CARAVAN, WORLD, ANIMALS, TASKS, STATION_SCALE, xpForLevel, upgradeCap, levelGift, maxDemand } from '../balance'
+import { REP, RUSH, CARAVAN, WORLD, ANIMALS, TASKS, CLASSIC_MAX, xpForLevel, upgradeCap, levelGift, maxDemand } from '../balance'
 import { fmt } from '../format'
 import { automated } from './belts'
 import { sfx } from '../audio'
@@ -40,8 +40,8 @@ function perksFor(sim: Sim, lvl: number): string {
   if (lvl === ANIMALS.bear.level) out.push('🐻 bears roam the meadow')
   if (lvl === TASKS.level) out.push('🎯 task board')
   if (lvl === REP.mineLevel) out.push(sim.zones.fishery ? '⛏️ Coal Mine for sale' : '⛏️ Coal Mine after the Fishery')
-  // the cap stops mattering once it passes the highest upgrade level
-  if (upgradeCap(lvl - 1) < STATION_SCALE.maxLevel) out.push(`upgrades up to Lv${Math.min(STATION_SCALE.maxLevel, upgradeCap(lvl))}`)
+  const cap = upgradeCap(lvl)
+  out.push(cap > CLASSIC_MAX ? `⭐ star upgrades up to ${cap - CLASSIC_MAX}` : `upgrades up to Lv${cap}`)
   if (maxDemand(lvl) > maxDemand(lvl - 1)) out.push(`🛒 survivors buy up to ${maxDemand(lvl)} each`)
   out.push('more survivors')
   return out.join(' · ')

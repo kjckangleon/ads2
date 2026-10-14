@@ -6,7 +6,8 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { sim } from '../game/state'
-import { furnaceBonus } from '../game/balance'
+import { furnaceBonus, furnacePay } from '../game/balance'
+import { fmt } from '../game/format'
 import { useUI } from '../game/uiStore'
 import { TextLabel, makeEmojiSprite } from './rutil'
 import { coalMat } from './characters'
@@ -99,7 +100,7 @@ function build(withLight: boolean) {
   const label = new TextLabel(0.8)
   label.sprite.position.set(0, 3.3, 0.6)
   root.add(label.sprite)
-  const bonus = new TextLabel(0.7)
+  const bonus = new TextLabel(0.7, 384)
   bonus.sprite.position.set(0, 2.75, 0.9)
   root.add(bonus.sprite)
 
@@ -162,7 +163,7 @@ export function FurnaceView() {
     v.fuel.update(f.fuel, sim.time)
     v.label.set(`${f.fuel}/${f.cap}`, f.fuel === 0 ? '#ff9a8a' : '#ffffff')
     v.bonus.set(
-      f.burning ? `🔥 Sales +${Math.round(furnaceBonus(f.level) * 100)}%` : 'needs 🪨 coal',
+      f.burning ? `💵 $${fmt(furnacePay(f.level))}/🪨 · sales +${Math.round(furnaceBonus(f.level) * 100)}%` : 'feed me 🪨 coal',
       f.burning ? '#ffd29a' : '#9fc4ff',
     )
   })

@@ -18,6 +18,7 @@ export function SimDriver() {
     if (now - lastFpsAt >= 1) {
       ;(window as any).__fps = Math.round(frames / (now - lastFpsAt))
       ;(window as any).__drawCalls = state.gl.info.render.calls
+      if (import.meta.env.DEV) (window as any).__scene = state.scene
       frames = 0
       lastFpsAt = now
     }

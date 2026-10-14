@@ -7,12 +7,13 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { sim } from '../game/state'
 import type { ProcessorId } from '../game/types'
-import { TextLabel, makeEmojiSprite, vertexColorMat } from './rutil'
+import { TextLabel, makeEmojiSprite, vertexColorMat, mergeStatic } from './rutil'
 import { FireEffect } from './Environment'
 import { hideGeo, coatGeo, fishGeo, smokedFishGeo, rawMeatMat, cookedMeatMat, makeBar, setBar } from './characters'
 import { ItemGrid, gridLayout } from './ItemGrid'
 import { PopIn } from './anim'
 import { capText } from '../game/balance'
+import { machineStaffs } from '../game/systems/belts'
 
 const STYLE: Record<ProcessorId, { sign: string; inIcon: string; outIcon: string; workIcon: string; ring: string; bar: string }> = {
   kitchen: { sign: '🍳', inIcon: '🥩', outIcon: '🍗', workIcon: '👨‍🍳', ring: '#ffb060', bar: '#ffab4a' },
@@ -222,6 +223,11 @@ function ProcessorView({ id }: { id: ProcessorId }) {
     progress.group.position.y = 2.25
     root.add(progress.group)
 
+    // bake tables, posts, stones and benches; keep what animates or toggles
+    const keep = new Set<THREE.Object3D>([workRing, progress.group])
+    if (center.item) keep.add(center.item)
+    if (center.needle) keep.add(center.needle)
+    mergeStatic(root, (o) => !keep.has(o))
     return { root, center, inGrid, outGrid, inLabel, outLabel, workRing, workIcon, progress }
   }, [id])
 
@@ -264,7 +270,7 @@ function ProcessorView({ id }: { id: ProcessorId }) {
     built.inLabel.set(capText(pr.inCount, pr.inCap), pr.inCount >= pr.inCap ? '#ff9a8a' : '#ffd9d0')
     built.outLabel.set(capText(pr.outCount, pr.outCap), pr.outCount >= pr.outCap ? '#ff9a8a' : '#ffe2b8')
     // hide the "stand here" marker once the workshop is staffed
-    const staffHired = sim.workers.some((w) => w.role === STAFF_ROLE[id])
+    const staffHired = sim.workers.some((w) => w.role === STAFF_ROLE[id]) || machineStaffs(sim, id)
     built.workRing.visible = !staffHired
     built.workIcon.visible = !staffHired
   })

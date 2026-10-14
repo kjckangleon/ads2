@@ -2,7 +2,7 @@
 // Upgrade pads marked `gated` stop at the settlement-level cap and show a
 // lock until the settlement grows.
 
-import type { Sim, PadSim, StationId, ProcessorId, WorkerRole, BeltId } from '../types'
+import type { Sim, PadSim, StationId, ProcessorId, WorkerRole, PadBeltId, MachineId } from '../types'
 import {
   PAD_BY_ID,
   padCost,
@@ -23,6 +23,8 @@ import {
   furnaceBonus,
   UNLIMITED,
   BELT_RETIRES,
+  MACHINE_IDS,
+  MACHINE_CFG,
 } from '../balance'
 import { dist } from '../util'
 import { sfx, haptic } from '../audio'
@@ -31,8 +33,7 @@ import { hireWorker } from './workers'
 import { banner } from './progress'
 import { requestSave } from '../saveFlag'
 import { automated, beltReplaces, retireWorkers } from './belts'
-
-const hasWorker = (sim: Sim, role: WorkerRole) => sim.workers.some((w) => w.role === role)
+import { moveSettlement, pendingStars } from './meta'
 
 const CONFETTI = ['#ffd75e', '#7fdc8f', '#ff8a7a', '#8fc4ff', '#ffffff']
 let payStreamT = 0
@@ -48,7 +49,7 @@ function padVisible(sim: Sim, pad: PadSim): boolean {
     case 'lumberjack':
       return s.woodServed >= 4
     case 'logCarrier':
-      return hasWorker(sim, 'lumberjack')
+      return automated(sim, 'lumberjack')
     case 'collector':
     case 'cook':
     case 'runner':
@@ -66,7 +67,7 @@ function padVisible(sim: Sim, pad: PadSim): boolean {
     case 'p_power':
       return sim.tower.built
     case 'kitchen_up':
-      return hasWorker(sim, 'cook')
+      return automated(sim, 'cook')
     case 'wood_up':
       return s.woodServed >= 3
     case 'meat_up':
@@ -84,10 +85,10 @@ function padVisible(sim: Sim, pad: PadSim): boolean {
     case 'coat_up':
       return sim.zones.tannery && s.coatServed >= 2
     case 'tailor_up':
-      return sim.zones.tannery && hasWorker(sim, 'tailor')
+      return sim.zones.tannery && automated(sim, 'tailor')
     // conveyor belts: late-game automation, once the chain they replace exists
     case 'belt_wood':
-      return beltsReady(sim) && hasWorker(sim, 'lumberjack')
+      return beltsReady(sim) && automated(sim, 'lumberjack')
     case 'belt_meat':
       return beltsReady(sim) && sim.proc.kitchen.unlocked
     case 'belt_coat':
@@ -114,6 +115,21 @@ function padVisible(sim: Sim, pad: PadSim): boolean {
       return sim.zones.mine
     case 'furnace_up':
       return sim.zones.mine && s.coalBurned >= 5
+    // machines: late-game, and only where their crew works
+    case 'm_saw':
+    case 'm_grill':
+    case 'm_skinner':
+      return beltsReady(sim) && sim.proc.kitchen.unlocked
+    case 'm_sewer':
+      return beltsReady(sim) && sim.zones.tannery
+    case 'm_auger':
+    case 'm_autosmoker':
+      return beltsReady(sim) && sim.zones.fishery
+    case 'm_drill':
+      return beltsReady(sim) && sim.zones.mine
+    // prestige opens once the whole map is built (the Coal Mine is the last district)
+    case 'prestige':
+      return sim.zones.mine
     default:
       return false
   }
@@ -136,9 +152,13 @@ export function missingText(sim: Sim, requires: string[]): string {
   return `Needs ${missing.slice(0, 2).join(' · ')}${missing.length > 2 ? ' …' : ''}`
 }
 
-const RETIRABLE = new Set<string>([...Object.values(BELT_RETIRES), 'cashier'])
+const RETIRABLE = new Set<string>([
+  ...Object.values(BELT_RETIRES),
+  'cashier',
+  ...MACHINE_IDS.map((id) => MACHINE_CFG[id].retires),
+])
 
-const BELT_PADS: Record<string, BeltId> = {
+const BELT_PADS: Record<string, PadBeltId> = {
   belt_wood: 'wood',
   belt_meat: 'meat',
   belt_coat: 'coat',
@@ -170,7 +190,7 @@ function padPreview(sim: Sim, pad: PadSim): string | null {
       return automated(sim, 'runner') ? 'Comes with the first night' : null
     // tease the belts as soon as the chain exists, so players know they're coming
     case 'belt_wood':
-      return hasWorker(sim, 'lumberjack') ? `Needs ⭐ Level ${REP.beltLevel}` : null
+      return automated(sim, 'lumberjack') ? `Needs ⭐ Level ${REP.beltLevel}` : null
     case 'belt_meat':
       return sim.proc.kitchen.unlocked ? `Needs ⭐ Level ${REP.beltLevel}` : null
     case 'belt_coat':
@@ -239,11 +259,28 @@ function unlockMine(sim: Sim) {
   const fp = sim.furnace.pos
   sim.fx.push({ t: 'burst', x: fp.x, y: 1.4, z: fp.z, color: '#ffb35a', n: 30, spread: 2 })
   sim.fx.push({ t: 'shake', power: 0.6 })
-  banner(sim, '⛏️ The Coal Mine is open!', `Keep the furnace lit: every sale +${Math.round(furnaceBonus(0) * 100)}%`, 'good')
+  banner(sim, '⛏️ The Coal Mine is open!', `Burn coal in the furnace: it sells heat and every sale +${Math.round(furnaceBonus(0) * 100)}%`, 'good')
   sfx.build()
 }
 
-function buildBelt(sim: Sim, id: BeltId, level: number) {
+function buildMachine(sim: Sim, id: MachineId, level: number) {
+  const m = sim.machines[id]
+  const cfg = MACHINE_CFG[id]
+  const first = m.level === 0
+  m.level = level
+  for (const b of cfg.belts ?? []) sim.belts[b].level = level
+  const at = cfg.proc ? sim.proc[cfg.proc].workSpot : m.pos
+  sim.fx.push({ t: 'burst', x: at.x, y: 1.2, z: at.z, color: '#cfd8e6', n: 22, spread: 1.6 })
+  if (first) {
+    retireWorkers(sim, cfg.retires)
+    sim.focus = { x: at.x, z: at.z, t: 1.8 }
+    sim.fx.push({ t: 'shake', power: 0.35 })
+    banner(sim, `${cfg.icon} ${cfg.label} running!`, 'No crew needed — upgrade it to work faster', 'good')
+  }
+  sfx.build()
+}
+
+function buildBelt(sim: Sim, id: PadBeltId, level: number) {
   const b = sim.belts[id]
   const first = b.level === 0
   b.level = level
@@ -333,6 +370,15 @@ export function applyPad(sim: Sim, pad: PadSim) {
     case 'belt_coal':
       buildBelt(sim, BELT_PADS[pad.id], pad.level)
       break
+    case 'm_saw':
+    case 'm_skinner':
+    case 'm_auger':
+    case 'm_drill':
+    case 'm_grill':
+    case 'm_sewer':
+    case 'm_autosmoker':
+      buildMachine(sim, pad.id.slice(2) as MachineId, pad.level)
+      break
     case 'belt_cash': {
       const first = sim.cash.level === 0
       sim.cash.level = pad.level
@@ -420,6 +466,7 @@ export function updateEconomy(sim: Sim, dt: number) {
     }
     // prerequisites: everything a pad builds on must be fully bought first
     if (!pad.lockText && def.requires) pad.lockText = missingText(sim, def.requires)
+    if (pad.id === 'prestige' && pendingStars(sim) < 1) pad.lockText = 'Sell more to earn ❄️'
     const cap = def.gated ? Math.min(def.maxLevel, upgradeCap(sim.rep.level)) : def.maxLevel
     pad.locked = pad.lockText !== '' || pad.level >= cap
     pad.needLevel = pad.locked && !pad.lockText ? pad.level + 1 - REP.upgradeCapBase : 0
@@ -428,6 +475,7 @@ export function updateEconomy(sim: Sim, dt: number) {
     const onPad = dist(p.pos, pad.pos) < pad.radius
     if (!onPad) {
       pad.hold = 0
+      pad.streak = 0
       continue
     }
     if (pad.locked) {
@@ -441,14 +489,26 @@ export function updateEconomy(sim: Sim, dt: number) {
       continue
     }
 
-    if (pad.hold < ECONOMY.padHoldSeconds) {
+    // moving the settlement costs nothing: a long hold is the confirmation
+    if (pad.id === 'prestige') {
+      if (pad.hold === 0) {
+        sim.fx.push({ t: 'text', x: pad.pos.x, y: 3, z: pad.pos.z, str: 'Stay to move: keep ❄️, start fresh', color: '#bfe6ff', size: 0.85 })
+      }
+      pad.hold = Math.min(pad.hold + dt, pad.holdNeed)
+      if (pad.hold >= pad.holdNeed) moveSettlement(sim)
+      continue
+    }
+
+    if (pad.hold < pad.holdNeed) {
       // only count down while there's money to spend, so the ring means "about to pay"
-      if (sim.money > 0) pad.hold = Math.min(pad.hold + dt, ECONOMY.padHoldSeconds)
+      if (sim.money > 0) pad.hold = Math.min(pad.hold + dt, pad.holdNeed)
       continue
     }
 
     if (sim.money > 0 && pad.paid < pad.cost) {
-      const rate = Math.max(pad.cost / ECONOMY.padDrainSeconds, 25)
+      // back-to-back levels pay faster, so a big upgrade run doesn't drag
+      const secs = Math.max(ECONOMY.padDrainMin, ECONOMY.padDrainSeconds * Math.pow(ECONOMY.padStreakMult, pad.streak))
+      const rate = Math.max(pad.cost / secs, 25)
       const drain = Math.min(sim.money, pad.cost - pad.paid, rate * dt)
       sim.money -= drain
       pad.paid += drain
@@ -462,8 +522,8 @@ export function updateEconomy(sim: Sim, dt: number) {
     }
     if (pad.cost - pad.paid < 0.001) {
       pad.paid = 0
-      // the next level waits for a fresh hold, so lingering doesn't buy it too
-      pad.hold = 0
+      // keep standing to keep upgrading: the hold isn't needed again until you step off
+      pad.streak++
       pad.level++
       sim.stats.bought++
       pad.done = pad.level >= def.maxLevel

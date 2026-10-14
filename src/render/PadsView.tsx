@@ -8,7 +8,8 @@ import { sim } from '../game/state'
 import { TextLabel, makeEmojiSprite, emojiTexture } from './rutil'
 import { damp } from '../game/util'
 import { fmt } from '../game/format'
-import { ECONOMY } from '../game/balance'
+import { CLASSIC_MAX } from '../game/balance'
+import { pendingStars } from '../game/systems/meta'
 
 interface PadVisual {
   root: THREE.Group
@@ -100,6 +101,14 @@ function makePadVisual(): PadVisual {
   return { root, base, fill, ring, icon, nameLabel, costLabel, holdArc, scale: 0 }
 }
 
+/** " 4/10" for normal upgrades, " ⭐3" once an endless upgrade passes Lv10 */
+function levelSuffix(level: number, max: number, id: string) {
+  if (id === 'prestige' || max <= 1) return ''
+  if (Number.isFinite(max)) return ` ${level + 1}/${max}`
+  const next = level + 1
+  return next <= CLASSIC_MAX ? ` ${next}/${CLASSIC_MAX}` : ` ⭐${next - CLASSIC_MAX}`
+}
+
 export function PadsView() {
   const visuals = useMemo(() => sim.pads.map(() => makePadVisual()), [])
   const group = useMemo(() => {
@@ -123,7 +132,7 @@ export function PadsView() {
       v.ring.material = pad.locked ? ringMatLocked : sim.money >= 1 ? ringMatAfford : ringMatPoor
       v.base.material = pad.locked ? baseMatLocked : baseMat
 
-      const hold = pad.locked ? 0 : pad.hold / ECONOMY.padHoldSeconds
+      const hold = pad.locked ? 0 : pad.hold / pad.holdNeed
       v.holdArc.visible = hold > 0 && hold < 1
       if (v.holdArc.visible) v.holdArc.geometry = holdArcGeos[Math.round(hold * HOLD_STEPS)]
 
@@ -138,9 +147,9 @@ export function PadsView() {
         mat.needsUpdate = true
       }
 
-      const lvlSuffix = pad.maxLevel > 1 ? ` ${pad.level + 1}/${pad.maxLevel}` : ''
-      v.nameLabel.set(pad.label + lvlSuffix, pad.locked ? '#9fb0c8' : '#dfe9f5')
+      v.nameLabel.set(pad.label + levelSuffix(pad.level, pad.maxLevel, pad.id), pad.locked ? '#9fb0c8' : '#dfe9f5')
       if (pad.locked) v.costLabel.set(pad.lockText || `⭐ Level ${pad.needLevel}`, '#9fc4ff')
+      else if (pad.id === 'prestige') v.costLabel.set(`❄️ +${pendingStars(sim)} · stand 3s`, '#bfe6ff')
       else v.costLabel.set(`💵 ${fmt(remaining)}`, sim.money >= remaining ? '#9fe08a' : '#ffb0a0')
       // affordable pads hop to pull the player over
       const canBuy = !pad.locked && sim.money >= remaining

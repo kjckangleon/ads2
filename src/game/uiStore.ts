@@ -47,6 +47,15 @@ export interface UIState {
   bannerText: string
   bannerSub: string
   bannerTone: string
+  stars: number
+  starBonus: number
+  /** Frost Stars a move would earn right now (0 before the mine) */
+  pendingStars: number
+  offlineAmount: number
+  offlineSeconds: number
+  offlineDouble: boolean
+  moving: boolean
+  movingStars: number
   /** '' = no furnace yet */
   furnace: '' | 'cold' | 'lit'
   furnaceBonus: number
@@ -82,6 +91,14 @@ export const useUI = create<UIState>((set) => ({
   bannerText: '',
   bannerSub: '',
   bannerTone: 'info',
+  stars: 0,
+  starBonus: 0,
+  pendingStars: 0,
+  offlineAmount: 0,
+  offlineSeconds: 0,
+  offlineDouble: false,
+  moving: false,
+  movingStars: 0,
   furnace: '',
   furnaceBonus: 0,
   furnaceFrac: 0,

@@ -5,6 +5,7 @@ import type { Sim } from '../types'
 import { PROC_IDS, PLAYER } from '../balance'
 import { dist } from '../util'
 import { sfx } from '../audio'
+import { machineStaffs } from './belts'
 
 export function updateProcessors(sim: Sim, dt: number) {
   for (const id of PROC_IDS) {
@@ -14,7 +15,7 @@ export function updateProcessors(sim: Sim, dt: number) {
       continue
     }
     const playerHere = dist(sim.player.pos, pr.workSpot) < PLAYER.workRange
-    const staffed = pr.staffed || playerHere
+    const staffed = pr.staffed || playerHere || machineStaffs(sim, id)
 
     if (staffed && pr.inCount > 0 && pr.outCount < pr.outCap) {
       pr.active = true

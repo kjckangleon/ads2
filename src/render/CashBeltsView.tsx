@@ -12,6 +12,7 @@ import { cashPoint } from '../game/systems/belts'
 import { billGeo, billMat } from './PilesView'
 import { frameMat, railMats, legMat, stripeCanvas } from './BeltsView'
 import { PopIn } from './anim'
+import { mergeStatic } from './rutil'
 
 const H = CASH_BELT.height
 const W = 0.62
@@ -142,7 +143,12 @@ function buildCashBelt(id: StationId, obs: { x: number; z: number; r: number }[]
   items.frustumCulled = false
   items.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
   root.add(items)
-  return { root, tex, rails, items }
+  const keep = new Set<THREE.Object3D>([items, ...rails])
+  mergeStatic(root, (o) => !keep.has(o))
+  // second pass: only the rails (and the segment groups holding them)
+  const railSet = new Set<THREE.Object3D>([...rails, ...rails.map((r) => r.parent!)])
+  const bakedRails = mergeStatic(root, (o) => railSet.has(o))
+  return { root, tex, rails: bakedRails, items }
 }
 
 function CashBeltView({ id }: { id: StationId }) {

@@ -22,7 +22,7 @@ export type Need = StationId
 /** Workshops that turn one resource into another. */
 export type ProcessorId = 'kitchen' | 'tailor' | 'smokehouse'
 
-export type PileId = 'woodPay' | 'meatPay' | 'coatPay' | 'fishPay' | 'caravanPay' | 'bountyPay'
+export type PileId = 'woodPay' | 'meatPay' | 'coatPay' | 'fishPay' | 'caravanPay' | 'bountyPay' | 'heatPay'
 
 export type ZoneId = 'tannery' | 'fishery' | 'mine'
 
@@ -30,7 +30,12 @@ export type ZoneId = 'tannery' | 'fishery' | 'mine'
 export type NodeKind = 'tree' | 'hole' | 'seam'
 
 /** Conveyor belts: each one carries a single resource from a source to a sink. */
-export type BeltId = 'wood' | 'meat' | 'coat' | 'fish' | 'coal'
+export type PadBeltId = 'wood' | 'meat' | 'coat' | 'fish' | 'coal'
+/** pad-bought belts plus the belts that come with each machine */
+export type BeltId = PadBeltId | 'saw' | 'skinRaw' | 'skinHide' | 'auger' | 'drill'
+
+/** Machines that do a worker's job: gatherers, the meadow skinner, and workshop automatons. */
+export type MachineId = 'saw' | 'skinner' | 'auger' | 'drill' | 'grill' | 'sewer' | 'autosmoker'
 
 export type CustomerState = 'toQueue' | 'queue' | 'leaving'
 
@@ -224,6 +229,8 @@ export interface WorkerSim {
   atkT: number
   swing: number
   patrolT: number
+  /** guards: the wolf being chased (-1 = none) */
+  targetId: number
 }
 
 export interface TowerSim {
@@ -260,8 +267,11 @@ export interface PadSim {
   level: number
   maxLevel: number
   pulse: number
-  /** seconds the player has stood on this pad; paying starts at ECONOMY.padHoldSeconds */
+  /** seconds the player has stood on this pad; paying starts once it reaches holdNeed */
   hold: number
+  holdNeed: number
+  /** levels bought in a row without stepping off (speeds up the drain) */
+  streak: number
 }
 
 export interface PlayerSim {
@@ -337,7 +347,8 @@ export interface RushSim {
 export interface Guide {
   x: number
   z: number
-  color: 'gold' | 'red' | 'teal'
+  /** gold = objective, red = raiding wolf, teal = caravan, blue = where your load goes */
+  color: 'gold' | 'red' | 'teal' | 'blue'
 }
 
 export type BannerTone = 'good' | 'warn' | 'info'
@@ -398,6 +409,23 @@ export interface CashBeltSim {
   vals: number[]
 }
 
+export interface MachineSim {
+  id: MachineId
+  /** 0 = not built; upgrades make it work faster */
+  level: number
+  pos: V2
+  /** facing toward what it's working on */
+  yaw: number
+  workT: number
+  /** node index it's working (gatherers) */
+  target: number
+  /** finished goods waiting for the machine's belt */
+  buf: Partial<Record<ResKind, number>>
+  /** animates the saw / drill / gears (seconds of activity) */
+  spin: number
+  active: boolean
+}
+
 /** Coal burns here; while lit, every stall sale pays a bonus. */
 export interface FurnaceSim {
   built: boolean
@@ -425,6 +453,16 @@ export interface TaskSim {
   xp: number
   /** seconds since completion (-1 while open); paid out, then replaced */
   doneT: number
+}
+
+export interface MetaSim {
+  /** permanent prestige currency: each one boosts sales, workers, start cash, offline pay */
+  stars: number
+  /** settlements moved so far */
+  runs: number
+  bestLevel: number
+  /** local date (YYYY-MM-DD) the free ×2 offline claim was last used */
+  doubleDay: string
 }
 
 export interface Stats {
@@ -480,6 +518,7 @@ export interface Sim {
   /** mine-mouth coal pile: miners stack here once a Coal Carrier is hired */
   coalDepot: DepotSim
   belts: Record<BeltId, BeltSim>
+  machines: Record<MachineId, MachineSim>
   /** cash belts share one level (0 = not built) */
   cash: { level: number; belts: Record<StationId, CashBeltSim>; fxAcc: number; fxT: number }
   furnace: FurnaceSim
@@ -505,4 +544,17 @@ export interface Sim {
   banners: Banner[]
   banner: Banner
   bannerT: number
+  /** survives "Move the Settlement": Frost Stars and run history */
+  meta: MetaSim
+  /** smoothed sales income ($/s), drives offline earnings */
+  incomeRate: number
+  rateT: number
+  rateEarned: number
+  /** wall-clock ms of the last tick (a long gap = time away) */
+  lastWall: number
+  /** "while you were away" payout waiting to be claimed */
+  offline: { amount: number; seconds: number } | null
+  /** > 0 while packing up for a new settlement (seconds left before the reload) */
+  moving: number
+  movingStars: number
 }

@@ -17,6 +17,13 @@ npm run build      # production build (debug excluded)
 npm run preview    # serve the production build
 ```
 
+**Always the latest build on phones.** Every build writes `dist/version.json`
+with a build id. The game fetches it uncached on start, every 3 minutes and
+whenever the app comes back to the foreground; if a newer build is live it
+saves and reloads onto it. When hosting, serve `index.html` and
+`version.json` with `Cache-Control: no-cache` (the `assets/` files are
+content-hashed and can be cached forever).
+
 ## Controls
 
 - **Desktop:** WASD / arrow keys to move.
@@ -95,9 +102,28 @@ Once food runs itself, new pressure and new goals arrive in turn:
   unlocks only once its chain is fully staffed (e.g. the Food Belt needs the
   Cook, 3 Meat Collectors and 2 Food Runners), and when it's built the haulers
   it replaces retire and their hire pad goes away.
+- **Machines** (Level 5+, after the full crew). Each replaces a job and
+  brings its own belt; the crew retires: 🪚 Auto-Saw (Lumberjacks, logs →
+  log pile), 🔪 Skinning Machine (Meat Collectors: pulls in every kill, meat →
+  kitchen, hides → tailor), 🌀 Ice Auger (Fishers, fish → smokehouse),
+  ⛏️ Coal Drill (Miners, coal → coal pile) and 🤖 automatons that run the
+  kitchen, tailor bench and smokehouse (Cook, Tailor, Smoker). Upgrades make
+  them faster. The Hunting Tower is the hunting machine; Guards stay human.
 - **Cash belts** (after the Log + Food belts and 2 Cash Collectors). Overhead
   money conveyors lift each stall's cash pile into the chest; the Cash
   Collectors retire and caravan / bounty pay is banked automatically.
+- **Endless upgrades.** Stall, workshop, Arrow Damage and Furnace upgrades
+  keep going past Lv10 as ⭐ star levels (still capped by settlement level,
+  2 + level), so there is always something to buy.
+- **Move the Settlement (prestige).** Once the Coal Mine is open, a 🧳 pad by
+  the entry road lets you start a fresh camp for ❄️ Frost Stars
+  (√(sales this run / 25K)). Stand on it 3 s to confirm. Each star is
+  permanent: +10% sales, +2% worker speed (up to +60%), +$1K starting cash
+  and better offline earnings.
+- **Offline earnings.** Close the game (or leave it in the background) and
+  your crew keeps earning: 40% of your recent income rate (+3% per Frost Star)
+  for up to 8 hours, collected from a "While you were away" popup, with a free
+  ×2 once a day.
 - **Prerequisites.** Locked pads say what they need ("Needs Food Runner 1/2 ·
   Cook"). The Ice Fishery needs a full Tannery crew, the Coal Mine a full
   Fishery crew.
@@ -105,8 +131,13 @@ Once food runs itself, new pressure and new goals arrive in turn:
   smoke the catch at the Smokehouse, sell it at the Fish stall. Hire a Fisher,
   Smoker and Fish Runners.
 - **Coal Mine** (Level 8, north). Mine coal seams, feed the Great Furnace by
-  camp: while it burns, every sale pays +25% (more with Furnace upgrades).
+  camp. Every lump it burns sells heat (cash on the pile beside it, more with
+  Furnace upgrades), and while it burns every stall sale pays +25% or more.
   Hire Miners and Coal Carriers.
+- **Where does this go?** While you carry something, blue ground arrows point
+  to where it's dropped off (coal → furnace, fish → smokehouse, …), with a
+  one-time hint per resource. Once the log / coal pile is automated it takes
+  matching items back instead of handing them to you.
 - **Big game.** Mountain goats (Level 5+) and bears (Level 7+) join the deer;
   they take many hits, drop more meat and hides, and a hurt bear charges and
   swipes you away. More animals roam as the settlement grows.
@@ -120,7 +151,7 @@ Once food runs itself, new pressure and new goals arrive in turn:
   done it always points at the next upgrade worth buying.
 
 Ground chevrons around the player point at the current objective (gold), a
-raiding wolf (red) and a waiting caravan (teal).
+raiding wolf (red), a waiting caravan (teal) and where your load goes (blue).
 
 ## Architecture
 

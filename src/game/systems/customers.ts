@@ -1,5 +1,5 @@
 import type { Sim, CustomerSim, StationSim, StationId } from '../types'
-import { CUSTOMERS, WORLD, RUSH, REP, STATION_IDS, maxCustomers, maxDemand, furnaceBonus } from '../balance'
+import { CUSTOMERS, WORLD, RUSH, REP, STATION_IDS, maxCustomers, maxDemand, furnaceBonus, starSalesMult } from '../balance'
 import { seek, dist } from '../util'
 import { sfx } from '../audio'
 import { addXp, rushMult } from './progress'
@@ -153,7 +153,7 @@ function serve(sim: Sim, c: CustomerSim, st: StationSim) {
   const angry = c.starveT > CUSTOMERS.angryAfter
   // a lit furnace warms the whole market: every sale pays more
   const heat = sim.furnace.burning ? 1 + furnaceBonus(sim.furnace.level) : 1
-  const base = Math.round(st.price * c.want * (c.vip ? CUSTOMERS.vipMult : 1) * heat)
+  const base = Math.round(st.price * c.want * (c.vip ? CUSTOMERS.vipMult : 1) * heat * starSalesMult(sim.meta.stars))
   let pay = base
   if (tipped) {
     const r = sim.rush

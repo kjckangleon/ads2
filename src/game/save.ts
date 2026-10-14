@@ -1,4 +1,4 @@
-import type { Sim, WorkerRole, StationId, ProcessorId, ZoneId, PileId, BeltId, TaskSim } from './types'
+import type { Sim, WorkerRole, StationId, ProcessorId, ZoneId, PileId, BeltId, TaskSim, MetaSim } from './types'
 import {
   PAD_BY_ID,
   padCost,
@@ -7,6 +7,8 @@ import {
   ZONE_IDS,
   BELT_IDS,
   BELT_RETIRES,
+  MACHINE_IDS,
+  MACHINE_CFG,
   CLOCK,
   CARAVAN,
   ECONOMY,
@@ -50,11 +52,24 @@ interface SaveV2 {
   coalDepot?: number
   furnaceFuel?: number
   tasks?: TaskSim[]
+  meta?: Partial<MetaSim>
+  incomeRate?: number
+  savedAt?: number
 }
 
 const PROC_BELT: Record<ProcessorId, BeltId> = { kitchen: 'meat', tailor: 'coat', smokehouse: 'fish' }
 
+/** machine goods (buffer + belt) that were on their way into this workshop */
+function inFlightTo(sim: Sim, id: ProcessorId): number {
+  const m = sim.machines
+  if (id === 'kitchen') return sim.belts.skinRaw.items.length + (m.skinner.buf.raw ?? 0)
+  if (id === 'tailor') return sim.belts.skinHide.items.length + (m.skinner.buf.hide ?? 0)
+  return sim.belts.auger.items.length + (m.auger.buf.fish ?? 0)
+}
+
 export function saveNow(sim: Sim) {
+  // the old camp must not overwrite the new one while it packs up
+  if (sim.moving > 0) return
   try {
     const data: SaveV2 = {
       v: 3,
@@ -70,9 +85,10 @@ export function saveNow(sim: Sim) {
       proc: Object.fromEntries(
         PROC_IDS.map((id) => {
           const pr = sim.proc[id]
-          // items riding a belt go back on the table they came from
+          // items riding a belt go back on the table they came from (or on to the one they were headed for)
           const outCount = pr.outCount + sim.belts[PROC_BELT[id]].items.length
-          return [id, { level: pr.level, inCount: pr.inCount, outCount, unlocked: pr.unlocked }]
+          const inCount = pr.inCount + inFlightTo(sim, id)
+          return [id, { level: pr.level, inCount, outCount, unlocked: pr.unlocked }]
         }),
       ),
       tower: {
@@ -101,11 +117,15 @@ export function saveNow(sim: Sim) {
       game: { ...sim.game },
       caravan: { count: sim.caravan.count, nextIn: sim.caravan.state === 'away' ? sim.caravan.nextIn : 20 },
       rushBest: sim.rush.best,
-      depot: sim.depot.count + sim.belts.wood.items.length,
-      coalDepot: sim.coalDepot.count + sim.belts.coal.items.length,
+      depot: sim.depot.count + sim.belts.wood.items.length + sim.belts.saw.items.length + (sim.machines.saw.buf.log ?? 0),
+      coalDepot:
+        sim.coalDepot.count + sim.belts.coal.items.length + sim.belts.drill.items.length + (sim.machines.drill.buf.coal ?? 0),
       furnaceFuel: sim.furnace.fuel,
       // finished-but-unpaid tasks are kept open so the reward isn't lost
       tasks: sim.tasks.map((t) => ({ ...t, doneT: -1 })),
+      meta: { ...sim.meta },
+      incomeRate: sim.incomeRate,
+      savedAt: Date.now(),
     }
     localStorage.setItem(KEY, JSON.stringify(data))
   } catch {
@@ -235,11 +255,24 @@ function apply(sim: Sim, d: SaveV2) {
   sim.tasks = (d.tasks ?? []).map((t) => ({ ...t, id: sim.ids++ }))
 
   sim.cash.level = d.pads.belt_cash?.level ?? 0
+  // machines (and the belts they bring) are rebuilt from their pads too
+  for (const id of MACHINE_IDS) {
+    const lvl = d.pads[`m_${id}`]?.level ?? 0
+    sim.machines[id].level = lvl
+    for (const b of MACHINE_CFG[id].belts ?? []) sim.belts[b].level = lvl
+  }
+
+  sim.meta = { ...sim.meta, ...d.meta }
+  sim.incomeRate = d.incomeRate ?? 0
+  sim.rateEarned = sim.stats.earned
+  // the first tick compares against this and pays out the time away
+  sim.lastWall = d.savedAt ?? 0
 
   for (const role of d.workers) hireWorker(sim, role)
   // haulers a belt has replaced don't come back
   for (const id of BELT_IDS) if (sim.belts[id].level > 0) retireWorkers(sim, BELT_RETIRES[id], true)
   if (sim.cash.level > 0) retireWorkers(sim, 'cashier', true)
+  for (const id of MACHINE_IDS) if (sim.machines[id].level > 0) retireWorkers(sim, MACHINE_CFG[id].retires, true)
 }
 
 export function loadSave(sim: Sim): boolean {

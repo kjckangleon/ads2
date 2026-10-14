@@ -20,6 +20,7 @@ import { sfx, haptic } from '../audio'
 import { hurtAnimal } from './animals'
 import { damageWolf } from './wolves'
 import { caravanDeliver, caravanNeeds, caravanX } from './caravan'
+import { automated } from './belts'
 
 interface Circle {
   x: number
@@ -345,11 +346,28 @@ function depositAndTake(sim: Sim) {
   }
 }
 
-/** Walk past the forest log pile (or the mine's coal pile) to scoop from it. */
-function takeFromDepot(sim: Sim, d: DepotSim) {
+/**
+ * The forest log pile / mine coal pile. While nothing carries from it you can
+ * scoop logs or coal off it; once a belt or carrier runs it, it's a drop-off
+ * instead — so stray coal always has a home and walking past never grabs any.
+ */
+function useDepot(sim: Sim, d: DepotSim, automated: boolean) {
   const p = sim.player
-  if (d.count <= 0 || p.transferCd > 0 || !hasRoom(sim)) return
-  if (dist(p.pos, d.pos) >= PLAYER.depositRange) return
+  if (p.transferCd > 0 || dist(p.pos, d.pos) >= PLAYER.depositRange) return
+  if (automated) {
+    if (d.count >= d.cap || !takeFromStack(p.carry, d.kind)) return
+    d.count++
+    p.transferCd = PLAYER.transferInterval
+    sfx.unstack(p.carry.length)
+    sim.fx.push({
+      t: 'itemfly',
+      kind: d.kind,
+      from: { x: p.pos.x, y: 1.8, z: p.pos.z },
+      to: { x: d.pos.x, y: 0.6, z: d.pos.z },
+    })
+    return
+  }
+  if (d.count <= 0 || !hasRoom(sim)) return
   d.count--
   p.carry.push(d.kind)
   p.transferCd = PLAYER.transferInterval
@@ -447,8 +465,8 @@ export function updatePlayer(sim: Sim, dt: number) {
   fight(sim, dt)
   pickUpDrops(sim)
   depositAndTake(sim)
-  takeFromDepot(sim, sim.depot)
-  if (sim.zones.mine) takeFromDepot(sim, sim.coalDepot)
+  useDepot(sim, sim.depot, automated(sim, 'logCarrier'))
+  if (sim.zones.mine) useDepot(sim, sim.coalDepot, automated(sim, 'coalCarrier'))
   feedFurnace(sim)
   supplyCaravan(sim)
   collectMoney(sim, dt)

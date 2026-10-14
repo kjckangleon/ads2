@@ -2,7 +2,8 @@
 // guide arrows that point the player at the current goal, raiding wolves and
 // waiting caravans.
 
-import type { Sim, V2, ProcessorId, StationId, WorkerRole, TreeSim, PadSim } from '../types'
+import type { Sim, V2, ProcessorId, StationId, WorkerRole, TreeSim, PadSim, ResKind } from '../types'
+import { RES_ICON } from '../icons'
 import { fmt } from '../format'
 import { WORLD, REP, CARAVAN, BELT_IDS } from '../balance'
 import { dist } from '../util'
@@ -131,7 +132,7 @@ export const OBJECTIVES: Objective[] = [
       return pile.value > 0 ? pile.pos : null
     },
   },
-  { text: '🪓 Hire a Lumberjack to chop for you', done: (s) => hasWorker(s, 'lumberjack'), target: padPos('lumberjack') },
+  { text: '🪓 Hire a Lumberjack to chop for you', done: (s) => automated(s, 'lumberjack'), target: padPos('lumberjack') },
   { text: '🍖 Build the Meat Stall (glowing pad)', done: (s) => s.stations.meat.unlocked, target: padPos('meatStall') },
   { text: '🪵 Hire a Log Carrier — wood runs itself!', done: (s) => automated(s, 'logCarrier'), target: padPos('logCarrier') },
   {
@@ -139,8 +140,8 @@ export const OBJECTIVES: Objective[] = [
     done: (s) => s.stats.meatServed >= 3,
     target: (s) => chainTarget(s, 'kitchen', 'meat', 'runner'),
   },
-  { text: '🍳 Hire a Cook — no more standing at the fire', done: (s) => hasWorker(s, 'cook'), target: padPos('cook') },
-  { text: '🧺 Hire a Meat Collector to gather the kills', done: (s) => hasWorker(s, 'collector'), target: padPos('collector') },
+  { text: '🍳 Hire a Cook — no more standing at the fire', done: (s) => automated(s, 'cook'), target: padPos('cook') },
+  { text: '🧺 Hire a Meat Collector to gather the kills', done: (s) => automated(s, 'collector'), target: padPos('collector') },
   { text: '🏃 Hire a Food Runner to restock the counter', done: (s) => automated(s, 'runner'), target: padPos('runner') },
   { text: '🏹 Build the Hunting Tower — it hunts for you', done: (s) => s.tower.built, target: padPos('tower') },
   { text: '💰 Hire a Cash Collector to bank your cash', done: (s) => automated(s, 'cashier'), target: padPos('cashier') },
@@ -182,7 +183,7 @@ export const OBJECTIVES: Objective[] = [
     done: (s) => s.stats.coatServed >= 2,
     target: (s) => chainTarget(s, 'tailor', 'coat', 'coatRunner'),
   },
-  { text: '🧵 Hire a Tailor', done: (s) => hasWorker(s, 'tailor'), target: padPos('tailor') },
+  { text: '🧵 Hire a Tailor', done: (s) => automated(s, 'tailor'), target: padPos('tailor') },
   { text: '🧥 Hire a Coat Runner', done: (s) => automated(s, 'coatRunner'), target: padPos('coatRunner') },
   {
     text: (s) =>
@@ -207,8 +208,8 @@ export const OBJECTIVES: Objective[] = [
     done: (s) => s.stats.fishServed >= 2,
     target: fishTarget,
   },
-  { text: '🔥 Hire a Smoker', done: (s) => hasWorker(s, 'smoker'), target: padPos('smoker') },
-  { text: '🎣 Hire a Fisher', done: (s) => hasWorker(s, 'fisher'), target: padPos('fisher') },
+  { text: '🔥 Hire a Smoker', done: (s) => automated(s, 'smoker'), target: padPos('smoker') },
+  { text: '🎣 Hire a Fisher', done: (s) => automated(s, 'fisher'), target: padPos('fisher') },
   { text: '🐟 Hire a Fish Runner', done: (s) => automated(s, 'fishRunner'), target: padPos('fishRunner') },
   {
     text: (s) =>
@@ -223,7 +224,7 @@ export const OBJECTIVES: Objective[] = [
     done: (s) => s.stats.coalBurned >= 5,
     target: coalTarget,
   },
-  { text: '⛏️ Hire a Miner', done: (s) => hasWorker(s, 'miner'), target: padPos('miner') },
+  { text: '⛏️ Hire a Miner', done: (s) => automated(s, 'miner'), target: padPos('miner') },
   { text: '🪨 Hire a Coal Carrier', done: (s) => automated(s, 'coalCarrier'), target: padPos('coalCarrier') },
   {
     // the open-ended tail: always point at the next thing worth buying
@@ -244,7 +245,8 @@ function nextPad(s: Sim): PadSim | null {
   let bestCost = Infinity
   let bestAfford = false
   for (const p of s.pads) {
-    if (!p.visible || p.locked || p.done) continue
+    // moving the settlement is a choice, not "the next upgrade"
+    if (!p.visible || p.locked || p.done || p.id === 'prestige') continue
     const left = p.cost - p.paid
     const afford = s.money >= left
     if ((afford && !bestAfford) || (afford === bestAfford && left < bestCost)) {
@@ -265,12 +267,53 @@ export function objectiveText(sim: Sim): string {
   return typeof o.text === 'function' ? o.text(sim) : o.text
 }
 
+/** where each carried resource is dropped off (null if that place isn't built yet) */
+function dropOff(s: Sim, kind: ResKind): { at: V2; name: string } | null {
+  const st = s.stations
+  const pr = s.proc
+  switch (kind) {
+    case 'log':
+      return { at: st.wood.restock, name: '🪵 Wood stall' }
+    case 'raw':
+      return pr.kitchen.unlocked ? { at: pr.kitchen.inZone, name: '🍳 Kitchen' } : null
+    case 'cooked':
+      return st.meat.unlocked ? { at: st.meat.restock, name: '🍖 Meat stall' } : null
+    case 'hide':
+      return pr.tailor.unlocked ? { at: pr.tailor.inZone, name: '🧵 Tailor' } : null
+    case 'coat':
+      return st.coat.unlocked ? { at: st.coat.restock, name: '🧥 Coat stall' } : null
+    case 'fish':
+      return pr.smokehouse.unlocked ? { at: pr.smokehouse.inZone, name: '🔥 Smokehouse' } : null
+    case 'smoked':
+      return st.fish.unlocked ? { at: st.fish.restock, name: '🐟 Fish stall' } : null
+    case 'coal':
+      return s.furnace.built ? { at: s.furnace.feed, name: '🔥 Furnace' } : null
+  }
+}
+
+/** kinds we've already told the player where to take (once per session) */
+const hinted = new Set<ResKind>()
+
 function updateGuides(sim: Sim, obj: Objective) {
   const g = sim.guides
   g.length = 0
   const p = sim.player.pos
   const tgt = obj.target?.(sim) ?? null
   if (tgt && dist(p, tgt) > 4.5) g.push({ x: tgt.x, z: tgt.z, color: 'gold' })
+
+  // carrying something? point at where the top of the stack belongs
+  const carry = sim.player.carry
+  if (carry.length) {
+    const kind = carry[carry.length - 1]
+    const dest = dropOff(sim, kind)
+    if (dest) {
+      if (dest.at !== tgt && dist(p, dest.at) > 3.5) g.push({ x: dest.at.x, z: dest.at.z, color: 'blue' })
+      if (!hinted.has(kind)) {
+        hinted.add(kind)
+        sim.fx.push({ t: 'text', x: p.x, y: 3.1, z: p.z, str: `${RES_ICON[kind]} → ${dest.name}`, color: '#9fc0ff', size: 0.95 })
+      }
+    }
+  }
 
   let wolf = null
   let wd = Infinity

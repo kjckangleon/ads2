@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 // ---------- emoji sprite textures (crisp icons with zero asset downloads) ----------
 
@@ -107,9 +108,9 @@ export const vertexColorMat = new THREE.MeshStandardMaterial({
 })
 
 /** simple ground blob shadow */
-const blobGeo = new THREE.CircleGeometry(0.5, 20)
+export const blobGeo = new THREE.CircleGeometry(0.5, 20)
 blobGeo.rotateX(-Math.PI / 2)
-const blobMat = new THREE.MeshBasicMaterial({
+export const blobMat = new THREE.MeshBasicMaterial({
   color: '#1c2636',
   transparent: true,
   opacity: 0.22,
@@ -129,4 +130,50 @@ export function stagedVisibility(groups: THREE.Object3D[], frac: number) {
   for (let i = 0; i < n; i++) {
     groups[i].visible = frac > (i + 0.01) / n || (i === 0 && frac > 0.001)
   }
+}
+
+// ---------- static batching ----------
+
+/**
+ * Bake the static meshes under `root` into one mesh per material (draw calls
+ * and scene-graph size drop a lot on phones). `pick` chooses which meshes may
+ * be baked — leave out anything animated, re-materialed or toggled. Instanced
+ * meshes and sprites are never touched. Returns the merged meshes.
+ */
+export function mergeStatic(root: THREE.Object3D, pick: (o: THREE.Object3D) => boolean): THREE.Mesh[] {
+  root.updateMatrixWorld(true)
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert()
+  const rel = new THREE.Matrix4()
+  const buckets = new Map<
+    string,
+    { mat: THREE.Material; geos: THREE.BufferGeometry[]; cast: boolean; receive: boolean; order: number }
+  >()
+  const baked: THREE.Mesh[] = []
+  root.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh || (m as THREE.InstancedMesh).isInstancedMesh || Array.isArray(m.material)) return
+    for (let p: THREE.Object3D | null = o; p && p !== root; p = p.parent) if (!pick(p)) return
+    const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()
+    g.applyMatrix4(rel.multiplyMatrices(inv, m.matrixWorld))
+    const attrs = Object.keys(g.attributes).sort().join(',')
+    const key = `${m.material.uuid}|${attrs}|${m.castShadow}|${m.receiveShadow}|${m.renderOrder}`
+    let b = buckets.get(key)
+    if (!b) {
+      b = { mat: m.material, geos: [], cast: m.castShadow, receive: m.receiveShadow, order: m.renderOrder }
+      buckets.set(key, b)
+    }
+    b.geos.push(g)
+    baked.push(m)
+  })
+  for (const m of baked) m.parent?.remove(m)
+  const out: THREE.Mesh[] = []
+  for (const b of buckets.values()) {
+    const merged = new THREE.Mesh(b.geos.length === 1 ? b.geos[0] : mergeGeometries(b.geos)!, b.mat)
+    merged.castShadow = b.cast
+    merged.receiveShadow = b.receive
+    merged.renderOrder = b.order
+    root.add(merged)
+    out.push(merged)
+  }
+  return out
 }

@@ -7,10 +7,11 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { sim } from '../game/state'
 import type { BeltId } from '../game/types'
-import { BELT, BELT_IDS, beltSpeed } from '../game/balance'
+import { BELT, ALL_BELT_IDS, beltSpeed } from '../game/balance'
 import { beltPoint } from '../game/systems/belts'
 import { makeCarryItem } from './characters'
 import { PopIn, Squash } from './anim'
+import { mergeStatic } from './rutil'
 
 const W = BELT.width
 const TOP = 0.22
@@ -150,7 +151,13 @@ function buildBelt(id: BeltId): BeltVisual {
   items.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
   root.add(items)
 
-  return { root, tex, rails, items, endCap }
+  // bake the static frame / legs / hopper, then the rails (their material shows the level)
+  const keep = new Set<THREE.Object3D>([items, endCap, ...rails])
+  mergeStatic(root, (o) => !keep.has(o))
+  // second pass: only the rails (and the segment groups holding them)
+  const railSet = new Set<THREE.Object3D>([...rails, ...rails.map((r) => r.parent!)])
+  const bakedRails = mergeStatic(root, (o) => railSet.has(o))
+  return { root, tex, rails: bakedRails, items, endCap }
 }
 
 function BeltView({ id }: { id: BeltId }) {
@@ -211,7 +218,7 @@ function BeltView({ id }: { id: BeltId }) {
 export function BeltsView() {
   return (
     <group>
-      {BELT_IDS.map((id) => (
+      {ALL_BELT_IDS.map((id) => (
         <BeltView key={id} id={id} />
       ))}
     </group>

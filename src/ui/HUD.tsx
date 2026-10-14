@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useUI } from '../game/uiStore'
 import { setMuted, isMuted } from '../game/audio'
 import { fmt } from '../game/format'
+import { sim } from '../game/state'
+import { claimOffline } from '../game/systems/meta'
 
 /** Rolls toward the real balance each animation frame and bumps on gains. */
 function Money() {
@@ -108,6 +110,67 @@ function Clock() {
   )
 }
 
+/** permanent prestige boost, shown once the first settlement has moved */
+function Stars() {
+  const stars = useUI((s) => s.stars)
+  const bonus = useUI((s) => s.starBonus)
+  const pending = useUI((s) => s.pendingStars)
+  if (stars <= 0 && pending <= 0) return null
+  return (
+    <div className="hud-stars" title="Frost Stars: permanent bonus from moving the settlement">
+      <span>❄️ {stars}</span>
+      {bonus > 0 && <small>+{bonus}% sales</small>}
+      {pending > 0 && <small className="pending">+{pending} on move</small>}
+    </div>
+  )
+}
+
+function duration(sec: number) {
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  return h > 0 ? `${h}h ${m}m` : `${Math.max(1, m)}m`
+}
+
+/** "While you were away" payout: collect it, or double it once a day */
+function Offline() {
+  const amount = useUI((s) => s.offlineAmount)
+  const seconds = useUI((s) => s.offlineSeconds)
+  const canDouble = useUI((s) => s.offlineDouble)
+  if (amount <= 0) return null
+  return (
+    <div className="hud-modal-backdrop">
+      <div className="hud-modal">
+        <div className="hud-modal-title">❄️ While you were away</div>
+        <div className="hud-modal-sub">Your crew kept the camp running for {duration(seconds)}</div>
+        <div className="hud-modal-amount">+${fmt(amount)}</div>
+        <div className="hud-modal-buttons">
+          <button className="hud-modal-btn" onClick={() => claimOffline(sim, false)}>
+            Collect
+          </button>
+          {canDouble && (
+            <button className="hud-modal-btn gold" onClick={() => claimOffline(sim, true)}>
+              ×2 Collect <small>(daily)</small>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** full-screen fade while the camp packs up for the next settlement */
+function Moving() {
+  const moving = useUI((s) => s.moving)
+  const stars = useUI((s) => s.movingStars)
+  if (!moving) return null
+  return (
+    <div className="hud-moving">
+      <div className="hud-moving-title">🧳 Moving to a new settlement…</div>
+      <div className="hud-moving-sub">+{stars} ❄️ Frost Stars: everything earns more from now on</div>
+    </div>
+  )
+}
+
 function Furnace() {
   const state = useUI((s) => s.furnace)
   const bonus = useUI((s) => s.furnaceBonus)
@@ -115,7 +178,7 @@ function Furnace() {
   if (!state) return null
   return (
     <div className={`hud-furnace ${state}`}>
-      <span>{state === 'lit' ? `🔥 Sales +${bonus}%` : '🧊 Furnace cold'}</span>
+      <span>{state === 'lit' ? `🔥 Furnace: sales +${bonus}%` : '🧊 Furnace cold: feed it coal'}</span>
       <div className="bar">
         <div style={{ width: `${frac * 100}%` }} />
       </div>
@@ -166,6 +229,7 @@ export function HUD() {
             <div style={{ width: `${xpFrac * 100}%` }} />
           </div>
         </div>
+        <Stars />
       </div>
       <div className="hud-center">
         <div className={`hud-objective${flash ? ' flash' : ''}`}>{objective}</div>
@@ -196,6 +260,8 @@ export function HUD() {
         <Furnace />
         <Tasks />
       </div>
+      <Offline />
+      <Moving />
     </div>
   )
 }

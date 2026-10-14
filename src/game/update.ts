@@ -9,6 +9,8 @@ import { updateTower } from './systems/tower'
 import { updateWorkers } from './systems/workers'
 import { updateProcessors } from './systems/processors'
 import { updateBelts } from './systems/belts'
+import { updateMeta, pendingStars, canDoubleOffline } from './systems/meta'
+import { starSalesMult } from './balance'
 import { updateTasks, taskProgress, taskText } from './systems/tasks'
 import { fmt } from './format'
 import { updateCaravan, orderText } from './systems/caravan'
@@ -51,6 +53,14 @@ function syncUI(sim: Sim) {
     bannerText: sim.banner.text,
     bannerSub: sim.banner.sub,
     bannerTone: sim.banner.tone,
+    stars: sim.meta.stars,
+    starBonus: Math.round((starSalesMult(sim.meta.stars) - 1) * 100),
+    pendingStars: sim.zones.mine ? pendingStars(sim) : 0,
+    offlineAmount: sim.offline?.amount ?? 0,
+    offlineSeconds: sim.offline?.seconds ?? 0,
+    offlineDouble: canDoubleOffline(sim),
+    moving: sim.moving > 0,
+    movingStars: sim.movingStars,
     furnace: !sim.furnace.built ? '' : sim.furnace.burning ? 'lit' : 'cold',
     furnaceBonus: Math.round(furnaceBonus(sim.furnace.level) * 100),
     furnaceFrac: sim.furnace.built ? q(sim.furnace.fuel / sim.furnace.cap, 20) : 0,
@@ -83,7 +93,15 @@ function syncUI(sim: Sim) {
 
 /** Master simulation tick — called once per rendered frame, before views. */
 export function tick(sim: Sim, dt: number) {
+  // packing up for a new settlement: freeze the old camp (and never save it again)
+  if (sim.moving > 0) {
+    sim.moving -= dt / Math.max(1, sim.speed)
+    if (sim.moving <= 0 && typeof window !== 'undefined' && window.location) window.location.reload()
+    syncUI(sim)
+    return
+  }
   sim.time += dt
+  updateMeta(sim, dt)
 
   updateClock(sim, dt)
   updatePlayer(sim, dt)

@@ -27,6 +27,7 @@ import { BeltsView } from '../render/BeltsView'
 import { FurnaceView } from '../render/FurnaceView'
 import { NodesView } from '../render/NodesView'
 import { CashBeltsView } from '../render/CashBeltsView'
+import { MachinesView } from '../render/MachinesView'
 
 // Phones have 2-3x screens; rendering at 1x there looks pixelated, so even low
 // quality renders above 1x and the adaptive monitor trades it back for frame rate.
@@ -44,7 +45,11 @@ function AdaptiveResolution({ quality }: { quality: Quality }) {
     <PerformanceMonitor
       onDecline={() => setDpr(MIN_DPR + (startDpr(quality) - MIN_DPR) * 0.5)}
       onIncline={() => setDpr(startDpr(quality))}
-      onFallback={() => setDpr(MIN_DPR)}
+      onFallback={() => {
+        setDpr(MIN_DPR)
+        // still struggling at 1x: drop shadows and extras rather than stutter
+        if (quality !== 'low') useUI.getState().set({ quality: 'low' })
+      }}
     />
   )
 }
@@ -83,6 +88,7 @@ export function Game() {
       <FurnaceView />
       <BeltsView />
       <CashBeltsView />
+      <MachinesView />
       <TowerView />
       <CaravanView />
       <PadsView />

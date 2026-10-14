@@ -5,11 +5,12 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { sim } from '../game/state'
 import type { StationId } from '../game/types'
 import { STATION_IDS, capText } from '../game/balance'
 import { useUI } from '../game/uiStore'
-import { TextLabel, makeEmojiSprite, vertexColorMat } from './rutil'
+import { TextLabel, makeEmojiSprite, vertexColorMat, mergeStatic } from './rutil'
 import { coatGeo, cookedMeatMat, smokedFishGeo } from './characters'
 import { ItemGrid, gridLayout } from './ItemGrid'
 import { PopIn, Squash } from './anim'
@@ -126,18 +127,21 @@ function buildStall(id: StationId, withLight: boolean): Stall {
   ;(zoneIcon.material as THREE.SpriteMaterial).opacity = 0.8
   root.add(zoneIcon)
 
-  const dotGeo = new THREE.CircleGeometry(0.3, 12)
+  // queue spots: one merged mesh per stall instead of a draw call per dot
+  const dots: THREE.BufferGeometry[] = []
   for (let i = 0; i < st.queueSize; i++) {
-    const dot = new THREE.Mesh(dotGeo, slotDotMat)
-    dot.rotation.x = -Math.PI / 2
-    dot.position.set(
+    const g = new THREE.CircleGeometry(0.3, 12)
+    g.rotateX(-Math.PI / 2)
+    g.translate(
       st.queueBase.x - st.pos.x + st.queueDir.x * st.queueSpacing * i,
       0.025,
       st.queueBase.z - st.pos.z + st.queueDir.z * st.queueSpacing * i,
     )
-    dot.renderOrder = 2
-    root.add(dot)
+    dots.push(g)
   }
+  const dotMesh = new THREE.Mesh(mergeGeometries(dots)!, slotDotMat)
+  dotMesh.renderOrder = 2
+  root.add(dotMesh)
 
   // lantern on the front-left post; glows at night
   const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.28, 0.2), lanternMat)
@@ -188,6 +192,10 @@ function buildStall(id: StationId, withLight: boolean): Stall {
     root.add(d.obj)
   }
 
+  // bake the stall body; each level decoration is baked on its own so it can still pop in
+  const decoSet = new Set<THREE.Object3D>(deco.map((d) => d.obj))
+  mergeStatic(root, (o) => !decoSet.has(o))
+  for (const d of deco) mergeStatic(d.obj, () => true)
   return { root, stock: stockGrid.grid, label, light, deco }
 }
 

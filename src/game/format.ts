@@ -4,7 +4,15 @@ export function fmt(n: number): string {
   if (v < 1000) return String(v)
   if (v < 1e6) return trim(v / 1e3, v < 1e4) + 'K'
   if (v < 1e9) return trim(v / 1e6, v < 1e7) + 'M'
-  return trim(v / 1e9, v < 1e10) + 'B'
+  // endless upgrades and prestige push past billions
+  const units = ['B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc']
+  let u = 0
+  let x = v / 1e9
+  while (x >= 1000 && u < units.length - 1) {
+    x /= 1000
+    u++
+  }
+  return trim(x, x < 10) + units[u]
 }
 
 function trim(x: number, oneDecimal: boolean) {

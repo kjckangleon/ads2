@@ -281,6 +281,147 @@ canvas {
   background: #8fa8ff;
 }
 
+/* ---------- frost stars / offline / moving ---------- */
+
+.hud-stars {
+  background: rgba(20, 40, 70, 0.8);
+  color: #cfeaff;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 4px 11px 5px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+
+.hud-stars small {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.hud-stars small.pending {
+  color: #9fe08a;
+}
+
+.hud-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 14, 26, 0.45);
+  pointer-events: auto;
+  z-index: 30;
+}
+
+.hud-modal {
+  background: rgba(16, 26, 44, 0.95);
+  border: 1px solid rgba(160, 200, 255, 0.25);
+  border-radius: 20px;
+  padding: 18px 22px 16px;
+  text-align: center;
+  color: #e4ecf7;
+  width: min(86vw, 340px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  animation: modal-in 0.35s ease-out;
+}
+
+.hud-modal-title {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.hud-modal-sub {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 4px;
+}
+
+.hud-modal-amount {
+  font-size: 34px;
+  font-weight: 900;
+  color: #b8ff9a;
+  margin: 10px 0 12px;
+}
+
+.hud-modal-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.hud-modal-btn {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 800;
+  background: #3e6fd1;
+  color: #fff;
+  cursor: pointer;
+}
+
+.hud-modal-btn.gold {
+  background: linear-gradient(#f0c84a, #d89a22);
+  color: #2a1a00;
+}
+
+.hud-modal-btn small {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.hud-moving {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(230, 240, 252, 0.92);
+  color: #1d2a3f;
+  text-align: center;
+  padding: 0 24px;
+  z-index: 40;
+  animation: moving-in 0.6s ease-out;
+}
+
+.hud-moving-title {
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.hud-moving-sub {
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+@keyframes moving-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* ---------- furnace ---------- */
 
 .hud-furnace {

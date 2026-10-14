@@ -91,9 +91,9 @@ export function villagerTorsoGeo(p: CharPalette): THREE.BufferGeometry {
   return geo
 }
 
-const legGeo = new THREE.BoxGeometry(0.15, 0.32, 0.18)
+export const legGeo = new THREE.BoxGeometry(0.15, 0.32, 0.18)
 legGeo.translate(0, -0.16, 0)
-const legMat = new THREE.MeshStandardMaterial({ color: '#2e3542', roughness: 0.9 })
+export const legMat = new THREE.MeshStandardMaterial({ color: '#2e3542', roughness: 0.9 })
 
 // ---------- resource visuals (carried, flying, stocked) ----------
 

@@ -21,14 +21,27 @@ second on a typical 4G connection.
 - Lights: 1 hemisphere + 1 directional (shadows) + 2 fire point lights + 3
   stall lanterns. The light count is constant, so nightfall never triggers a
   shader recompile. Low quality drops the lanterns and shadows.
+- Lights: + 1 furnace light (also always mounted, intensity 0 while cold).
 - Instanced: background forest (~150 trees × 5 parts), rocks, particles (360),
-  barrier mounds.
-- Pooled: 48 customers, 20 workers, 10 deer, 6 rabbits, 10 wolves, 40 meat +
-  40 hide drops, 32 floating texts, 70 cash flights, 56 item flights, 20 arrows.
+  barrier mounds, belt items, cash bundles.
+- **Instanced crowd (up to 96 customers):** one torso batch per coat palette
+  (7), one batch for all legs, one for blob shadows, one per carried item kind,
+  and one billboard batch (emoji atlas) for every need / mood / ×N bubble —
+  about 15 draw calls no matter how many survivors are on screen.
+- **Static batching:** belts, cash belts, stalls, workshops, machine bodies,
+  district dressing, trampled paths and mountains are baked into one mesh per
+  material at build time (`mergeStatic` in `render/rutil.ts`).
+- Pooled: 34 workers, 16 deer, 6 rabbits, 8 goats, 4 bears, 10 wolves, 40
+  meat + 40 hide drops, 32 floating texts, 70 cash flights, 56 item flights,
+  20 arrows.
 - Instanced per kind: carry stacks (player + workers), stall / table inventory
   grids, cash-bundle piles.
-- Measured late game (Level 8, 17 workers, 28 customers): ~470 draw calls per
-  frame including the shadow pass; simulation 0.017 ms per tick.
+- Measured late game with every district, belt and machine (desktop Chrome,
+  camera over the camp): 45 customers 335 draw calls before the crowd
+  instancing → 80 customers 177 draw calls after; scene objects 1031 → 652.
+  Simulation 0.03 ms per tick with 70 customers, 31 workers, 28 animals.
+- Adaptive: render resolution steps down when frames drop; if it still can't
+  keep up at 1×, quality falls back to Low (no shadows).
 
 ## Headroom for the art pass
 

@@ -3,8 +3,8 @@
 // travel as visible stacks. Role functions only choose sources and sinks;
 // reservations stop two workers claiming the same drop, tree or coin pile.
 
-import type { Sim, WorkerSim, WorkerRole, ResKind, ProcessorSim, ProcessorId, V2, DropSim, TreeSim, DepotSim, BeltId } from '../types'
-import { WORKERS, WORLD, GUARD, TREES, NODES, PROC_IDS, workerSpeed, workerCap, guardDamage } from '../balance'
+import type { Sim, WorkerSim, WorkerRole, ResKind, ProcessorSim, ProcessorId, V2, DropSim, TreeSim, DepotSim, BeltId, WolfSim } from '../types'
+import { WORKERS, WORLD, GUARD, TREES, NODES, PROC_IDS, workerSpeed, workerCap, guardDamage, starWorkerMult } from '../balance'
 import { RES_NAME } from '../icons'
 import { fmt } from '../format'
 import { seek, dist, lerpAngle, damp } from '../util'
@@ -42,6 +42,7 @@ export function hireWorker(sim: Sim, role: WorkerRole, at?: V2) {
     atkT: 0,
     swing: 0,
     patrolT: Math.random() * 6,
+    targetId: -1,
   }
   sim.workers.push(w)
   sim.fx.push({ t: 'burst', x: w.pos.x, y: 1.2, z: w.pos.z, color: '#9fd0ff', n: 12, spread: 0.8 })
@@ -51,7 +52,7 @@ export function hireWorker(sim: Sim, role: WorkerRole, at?: V2) {
 const capOf = (sim: Sim, role: WorkerRole) => workerCap(role, sim.lodge.capLvl)
 
 function walk(sim: Sim, w: WorkerSim, target: V2, dt: number, arrive = 0.35, mult = 1) {
-  const sp = workerSpeed(sim.lodge.spdLvl) * mult
+  const sp = workerSpeed(sim.lodge.spdLvl) * mult * starWorkerMult(sim.meta.stars)
   const done = seek(w, target, sp, dt, arrive)
   if (!done) w.walkPhase += dt * sp * 2.3
   return done
@@ -446,26 +447,37 @@ const miner = (sim: Sim, w: WorkerSim, dt: number) =>
 
 // ---------------- guard: chase and fight wolves near the post ----------------
 
+/** a wolf that has meat or is taking some is worth a long chase */
+const isThief = (wolf: WolfSim) => wolf.carry > 0 || wolf.state === 'steal'
+
 function updateGuard(sim: Sim, w: WorkerSim, dt: number) {
-  let target = null
-  let bestD = Infinity
+  // pick the closest threat; prefer wolves no other guard is already on, so a
+  // pack gets split up instead of three guards chasing one wolf
+  let target: WolfSim | null = null
+  let bestScore = Infinity
   for (const wolf of sim.wolves) {
     // let empty-handed wolves run off; chase thieves and raiders
     if (wolf.state === 'flee' && wolf.carry === 0) continue
     const dPost = dist(wolf.pos, w.post)
-    if (dPost > GUARD.leash) continue
     const d = dist(wolf.pos, w.pos)
-    const reach = GUARD.aggro + (w.mode === 'chase' ? 6 : 0)
-    if ((d < reach || dPost < GUARD.aggro) && d < bestD) {
-      bestD = d
+    const thief = isThief(wolf)
+    const inZone = thief ? dPost < GUARD.thiefRange : dPost < GUARD.leash
+    const noticed = d < GUARD.aggro + (w.mode === 'chase' ? 8 : 0) || dPost < GUARD.aggro || thief
+    if (!inZone || !noticed) continue
+    const taken = sim.workers.some((o) => o !== w && o.role === 'guard' && o.mode === 'chase' && o.targetId === wolf.id)
+    const score = d - (thief ? 6 : 0) + (taken ? 12 : 0)
+    if (score < bestScore) {
+      bestScore = score
       target = wolf
     }
   }
 
   if (target) {
     w.mode = 'chase'
-    w.activity = 'fighting wolves!'
-    if (bestD > GUARD.range) {
+    w.targetId = target.id
+    w.activity = isThief(target) ? 'chasing a thief!' : 'fighting wolves!'
+    const d = dist(target.pos, w.pos)
+    if (d > GUARD.range) {
       walk(sim, w, target.pos, dt, GUARD.range * 0.8, GUARD.speedMult)
     } else {
       w.yaw = lerpAngle(w.yaw, Math.atan2(target.pos.x - w.pos.x, target.pos.z - w.pos.z), damp(12, dt))
@@ -480,10 +492,11 @@ function updateGuard(sim: Sim, w: WorkerSim, dt: number) {
   }
 
   w.mode = 'patrol'
+  w.targetId = -1
   w.activity = sim.clock.night ? 'standing watch' : 'on patrol'
   w.patrolT += dt
-  const ang = w.patrolT * 0.35
-  walk(sim, w, { x: w.post.x + Math.cos(ang) * 2.2, z: w.post.z + Math.sin(ang) * 1.4 }, dt, 0.4, 0.55)
+  const ang = w.patrolT * 0.5
+  walk(sim, w, { x: w.post.x + Math.cos(ang) * GUARD.patrolX, z: w.post.z + Math.sin(ang) * GUARD.patrolZ }, dt, 0.3, 0.45)
 }
 
 // ---------------- dispatcher ----------------

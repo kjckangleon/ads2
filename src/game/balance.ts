@@ -1,11 +1,15 @@
-import type { ResKind, StationId, ProcessorId, PileId, WorkerRole, ZoneId, BeltId, AnimalKind, V2 } from './types'
+import type { ResKind, StationId, ProcessorId, PileId, WorkerRole, ZoneId, BeltId, PadBeltId, MachineId, AnimalKind, V2, NodeKind } from './types'
 
 // All tuning values live here — no magic numbers scattered through systems.
 
 export const STATION_IDS: StationId[] = ['wood', 'meat', 'coat', 'fish']
 export const PROC_IDS: ProcessorId[] = ['kitchen', 'tailor', 'smokehouse']
 export const ZONE_IDS: ZoneId[] = ['tannery', 'fishery', 'mine']
-export const BELT_IDS: BeltId[] = ['wood', 'meat', 'coat', 'fish', 'coal']
+/** belts bought on their own pad */
+export const BELT_IDS: PadBeltId[] = ['wood', 'meat', 'coat', 'fish', 'coal']
+/** every belt, including the ones machines bring */
+export const ALL_BELT_IDS: BeltId[] = [...BELT_IDS, 'saw', 'skinRaw', 'skinHide', 'auger', 'drill']
+export const MACHINE_IDS: MachineId[] = ['saw', 'skinner', 'auger', 'drill', 'grill', 'sewer', 'autosmoker']
 
 export const WORLD = {
   bounds: { minX: -34, maxX: 34, minZ: -26, maxZ: 34 },
@@ -82,6 +86,7 @@ export const PILES: Record<PileId, { x: number; z: number }> = {
   meatPay: { x: 6.7, z: 2.6 },
   coatPay: { x: 22.7, z: 9.6 },
   fishPay: { x: -26.7, z: 4.6 },
+  heatPay: { x: 3.9, z: -9.4 },
   caravanPay: { x: -19.2, z: 14.6 },
   bountyPay: { x: 15.0, z: -9.6 },
 }
@@ -110,8 +115,9 @@ export const PLAYER = {
 
 export const CUSTOMERS = {
   maxBase: 30,
-  maxPerLevel: 3,
-  maxCap: 48,
+  maxPerLevel: 4,
+  /** the crowd is instanced, so big rushes are cheap to draw */
+  maxCap: 96,
   baseInterval: 2.4,
   minInterval: 0.55,
   speed: 4.2,
@@ -149,9 +155,9 @@ export interface StationCfg {
 }
 
 export const STATION_CFG: Record<StationId, StationCfg> = {
-  wood: { baseCapacity: 30, basePrice: 20, baseServiceTime: 0.35, queueSize: 12, queueSpacing: 1.1, accepts: 'log', pile: 'woodPay', startStock: 4 },
-  meat: { baseCapacity: 24, basePrice: 45, baseServiceTime: 0.4, queueSize: 12, queueSpacing: 1.1, accepts: 'cooked', pile: 'meatPay', startStock: 0 },
-  coat: { baseCapacity: 18, basePrice: 110, baseServiceTime: 0.5, queueSize: 11, queueSpacing: 1.1, accepts: 'coat', pile: 'coatPay', startStock: 0 },
+  wood: { baseCapacity: 30, basePrice: 20, baseServiceTime: 0.35, queueSize: 18, queueSpacing: 1.1, accepts: 'log', pile: 'woodPay', startStock: 4 },
+  meat: { baseCapacity: 24, basePrice: 45, baseServiceTime: 0.4, queueSize: 18, queueSpacing: 1.1, accepts: 'cooked', pile: 'meatPay', startStock: 0 },
+  coat: { baseCapacity: 18, basePrice: 110, baseServiceTime: 0.5, queueSize: 16, queueSpacing: 1.1, accepts: 'coat', pile: 'coatPay', startStock: 0 },
   fish: { baseCapacity: 24, basePrice: 150, baseServiceTime: 0.45, queueSize: 10, queueSpacing: 1.1, accepts: 'smoked', pile: 'fishPay', startStock: 0 },
 }
 
@@ -174,6 +180,8 @@ export const PROC_CFG: Record<
 
 export const PROC_SCALE = {
   timeMult: 0.88,
+  /** star levels keep shortening work down to this */
+  minTime: 0.08,
   capMult: 1.3,
   maxLevel: 10,
 }
@@ -260,16 +268,23 @@ export const CLOCK = {
 
 export const GUARD = {
   aggro: 11,
-  leash: 20,
+  leash: 26,
+  /** wolves stealing or running off with meat are chased from this far */
+  thiefRange: 34,
   baseDamage: 2,
   attackTime: 0.4,
   range: 1.4,
-  speedMult: 1.25,
+  /** faster than a fleeing wolf (WOLVES.fleeSpeed), so thieves get caught */
+  speedMult: 1.55,
+  /** clear ground by the kitchen / meat stall, the meadow, and the north camp */
   posts: [
-    { x: 12.5, z: -1.5 },
-    { x: 21, z: -9.5 },
-    { x: 4, z: -9 },
+    { x: 14.3, z: -2.4 },
+    { x: 23.4, z: -12.2 },
+    { x: 8.0, z: -7.6 },
   ],
+  /** patrol loop around the post (kept small so guards stay off belts and pads) */
+  patrolX: 1.0,
+  patrolZ: 0.5,
 }
 
 export const RUSH = {
@@ -366,6 +381,10 @@ export const ECONOMY = {
   /** cash/sec the player vacuums from a pile (scales with pile size) */
   collectBase: 120,
   padDrainSeconds: 0.7,
+  /** each consecutive level bought without stepping off drains this much faster... */
+  padStreakMult: 0.8,
+  /** ...down to this many seconds per level */
+  padDrainMin: 0.15,
   /** stand on a pad this long before money starts draining, so walking across one doesn't buy it */
   padHoldSeconds: 0.8,
   autosaveInterval: 5,
@@ -373,6 +392,48 @@ export const ECONOMY = {
   billValue: 25,
   /** stats gates that used to be single coins are scaled by this */
   scale: 5,
+}
+
+// ---- prestige: Frost Stars carry over when the settlement moves ----
+
+export const PRESTIGE = {
+  /** stars for a run = floor(sqrt(sales earned / this)) */
+  starDiv: 25000,
+  salesPerStar: 0.1,
+  workerSpeedPerStar: 0.02,
+  maxWorkerSpeed: 0.6,
+  startCashPerStar: 1000,
+  /** seconds of "packing up" before the new camp loads */
+  moveTime: 2.2,
+}
+
+export function starsFor(earned: number) {
+  return Math.floor(Math.sqrt(Math.max(0, earned) / PRESTIGE.starDiv))
+}
+export function starSalesMult(stars: number) {
+  return 1 + PRESTIGE.salesPerStar * stars
+}
+export function starWorkerMult(stars: number) {
+  return 1 + Math.min(PRESTIGE.maxWorkerSpeed, PRESTIGE.workerSpeedPerStar * stars)
+}
+
+// ---- offline earnings ----
+
+export const OFFLINE = {
+  /** shorter gaps aren't worth a popup */
+  minSeconds: 60,
+  maxHours: 8,
+  /** share of the live income rate the crew earns while you're away */
+  frac: 0.4,
+  fracPerStar: 0.03,
+  maxFrac: 1,
+  /** income rate smoothing: sample every few seconds */
+  sampleEvery: 5,
+  smoothing: 0.12,
+}
+
+export function offlineFrac(stars: number) {
+  return Math.min(OFFLINE.maxFrac, OFFLINE.frac + OFFLINE.fracPerStar * stars)
 }
 
 // ---- task board: three rotating goals with cash + XP rewards ----
@@ -453,10 +514,94 @@ export const BELT_CFG: Record<BeltId, { kind: ResKind; path: V2[] }> = {
       { x: 3.05, z: -11.4 },
     ],
   },
+  // ---- machine belts ----
+  saw: {
+    kind: 'log',
+    path: [
+      { x: -16.4, z: -6.2 },
+      { x: -14.2, z: -6.2 },
+      { x: -14.2, z: -4.85 },
+    ],
+  },
+  skinRaw: {
+    kind: 'raw',
+    path: [
+      { x: 21.4, z: -7.3 },
+      { x: 21.4, z: -8.25 },
+      { x: 12.4, z: -8.25 },
+      { x: 12.4, z: -6.6 },
+    ],
+  },
+  skinHide: {
+    kind: 'hide',
+    path: [
+      { x: 22.5, z: -5.6 },
+      { x: 22.5, z: 0.2 },
+      { x: 23.6, z: 0.2 },
+    ],
+  },
+  auger: {
+    kind: 'fish',
+    path: [
+      { x: -22.0, z: -19.4 },
+      { x: -31.1, z: -13.6 },
+      { x: -31.1, z: -6.15 },
+    ],
+  },
+  drill: {
+    kind: 'coal',
+    path: [
+      { x: -1.2, z: -17.8 },
+      { x: -1.2, z: -16.0 },
+      { x: 3.55, z: -16.0 },
+    ],
+  },
+}
+
+// ---- machines: they take over a worker's job (and bring their own belt) ----
+
+export interface MachineCfg {
+  kind: 'gather' | 'collect' | 'staff'
+  label: string
+  icon: string
+  /** the hire it replaces (they retire when it's built) */
+  retires: WorkerRole
+  pos: V2
+  /** gatherers: which nodes, how far the arm reaches, what comes out */
+  nodes?: NodeKind
+  reach?: number
+  out?: ResKind
+  /** seconds per item at level 1 */
+  workTime?: number
+  belts?: BeltId[]
+  /** staff machines run this workshop */
+  proc?: ProcessorId
+}
+
+export const MACHINE_CFG: Record<MachineId, MachineCfg> = {
+  saw: { kind: 'gather', label: 'Auto-Saw', icon: '🪚', retires: 'lumberjack', pos: { x: -17.5, z: -7 }, nodes: 'tree', reach: 8.6, out: 'log', workTime: 0.26, belts: ['saw'] },
+  skinner: { kind: 'collect', label: 'Skinning Machine', icon: '🔪', retires: 'collector', pos: { x: 22.5, z: -6.8 }, workTime: 0.12, belts: ['skinRaw', 'skinHide'] },
+  auger: { kind: 'gather', label: 'Ice Auger', icon: '🌀', retires: 'fisher', pos: { x: -21, z: -20.5 }, nodes: 'hole', reach: 6.5, out: 'fish', workTime: 0.4, belts: ['auger'] },
+  drill: { kind: 'gather', label: 'Coal Drill', icon: '⛏️', retires: 'miner', pos: { x: -1.2, z: -19 }, nodes: 'seam', reach: 9.5, out: 'coal', workTime: 0.32, belts: ['drill'] },
+  grill: { kind: 'staff', label: 'Auto-Grill', icon: '🤖', retires: 'cook', pos: { x: 0, z: 0 }, proc: 'kitchen' },
+  sewer: { kind: 'staff', label: 'Sewing Machine', icon: '🤖', retires: 'tailor', pos: { x: 0, z: 0 }, proc: 'tailor' },
+  autosmoker: { kind: 'staff', label: 'Auto-Smoker', icon: '🤖', retires: 'smoker', pos: { x: 0, z: 0 }, proc: 'smokehouse' },
+}
+
+export const MACHINE = {
+  /** finished goods a gatherer machine holds before its belt takes them */
+  bufCap: 16,
+  /** each upgrade works this much faster */
+  speedMult: 0.72,
+  maxLevel: 3,
+}
+
+export function machineWorkTime(id: MachineId, level: number) {
+  return (MACHINE_CFG[id].workTime ?? 0.3) * Math.pow(MACHINE.speedMult, Math.max(0, level - 1))
 }
 
 /** a belt takes over its haulers' job: they retire and their hire pad goes away */
-export const BELT_RETIRES: Record<BeltId, WorkerRole> = {
+export const BELT_RETIRES: Record<PadBeltId, WorkerRole> = {
   wood: 'logCarrier',
   meat: 'runner',
   coat: 'coatRunner',
@@ -511,11 +656,17 @@ export const FURNACE = {
   burnTime: 1.4,
   bonusBase: 0.25,
   bonusPerLvl: 0.05,
+  /** the furnace also sells heat: cash per lump burned (grows with Furnace +) */
+  payBase: 30,
+  payMult: 1.25,
   radius: 1.35,
 }
 
 export function furnaceCap(level: number) {
   return FURNACE.baseCap + FURNACE.capPerLvl * level
+}
+export function furnacePay(level: number) {
+  return Math.round(FURNACE.payBase * Math.pow(FURNACE.payMult, level))
 }
 export function furnaceBonus(level: number) {
   return FURNACE.bonusBase + FURNACE.bonusPerLvl * level
@@ -540,7 +691,7 @@ export function stationServiceTime(id: StationId, lvl: number) {
   )
 }
 export function procTime(id: ProcessorId, lvl: number) {
-  return PROC_CFG[id].baseTime * Math.pow(PROC_SCALE.timeMult, lvl)
+  return Math.max(PROC_SCALE.minTime, PROC_CFG[id].baseTime * Math.pow(PROC_SCALE.timeMult, lvl))
 }
 export function procInCap(id: ProcessorId, lvl: number) {
   if (lvl >= PROC_SCALE.maxLevel) return UNLIMITED
@@ -630,6 +781,11 @@ export function guardDamage(settlementLevel: number) {
 
 // ---- purchase pads: base costs + repeat scaling ----
 
+/** upgrades with no top level: past Lv10 they become ⭐ star levels */
+export const ENDLESS = Infinity
+/** the classic top level; star levels count from here */
+export const CLASSIC_MAX = 10
+
 export interface PadDef {
   id: string
   x: number
@@ -643,6 +799,8 @@ export interface PadDef {
   gated?: boolean
   /** pads that must be fully bought before this one unlocks ('id@n' = just level n) */
   requires?: string[]
+  /** seconds to stand on it before it acts (default ECONOMY.padHoldSeconds) */
+  holdSeconds?: number
 }
 
 export const PAD_DEFS: PadDef[] = [
@@ -656,11 +814,11 @@ export const PAD_DEFS: PadDef[] = [
   { id: 'lumberjack', x: -13.5, z: 1.5, label: 'Lumberjack', icon: '🪓', baseCost: 150, costMult: 2.2, maxLevel: 3 },
   { id: 'logCarrier', x: -11.2, z: -3.0, label: 'Log Carrier', icon: '🪵', baseCost: 250, costMult: 2.2, maxLevel: 3 },
   // stall + workshop upgrades
-  { id: 'wood_up', x: -11.8, z: 4.5, label: 'Wood Stall +', icon: '⬆️', baseCost: 300, costMult: 1.6, maxLevel: 10, gated: true },
-  { id: 'meat_up', x: 11.8, z: 4.5, label: 'Meat Stall +', icon: '⬆️', baseCost: 400, costMult: 1.6, maxLevel: 10, gated: true },
-  { id: 'kitchen_up', x: 18.2, z: -2.6, label: 'Kitchen +', icon: '⬆️', baseCost: 450, costMult: 1.6, maxLevel: 10, gated: true },
+  { id: 'wood_up', x: -11.8, z: 4.5, label: 'Wood Stall +', icon: '⬆️', baseCost: 300, costMult: 1.6, maxLevel: ENDLESS, gated: true },
+  { id: 'meat_up', x: 11.8, z: 4.5, label: 'Meat Stall +', icon: '⬆️', baseCost: 400, costMult: 1.6, maxLevel: ENDLESS, gated: true },
+  { id: 'kitchen_up', x: 18.2, z: -2.6, label: 'Kitchen +', icon: '⬆️', baseCost: 450, costMult: 1.6, maxLevel: ENDLESS, gated: true },
   // hunting
-  { id: 'tower_dmg', x: 14.5, z: -13.5, label: 'Arrow Damage', icon: '⚔️', baseCost: 350, costMult: 1.55, maxLevel: 10, gated: true },
+  { id: 'tower_dmg', x: 14.5, z: -13.5, label: 'Arrow Damage', icon: '⚔️', baseCost: 350, costMult: 1.55, maxLevel: ENDLESS, gated: true },
   { id: 'tower_spd', x: 17.5, z: -14.5, label: 'Fire Rate', icon: '⚡', baseCost: 350, costMult: 1.55, maxLevel: 10, gated: true },
   { id: 'tower_rng', x: 20.5, z: -13.5, label: 'Range', icon: '🎯', baseCost: 300, costMult: 1.55, maxLevel: 10, gated: true },
   { id: 'game_up', x: 17.5, z: -18.4, label: 'Wild Game', icon: '🦌', baseCost: 750, costMult: 1.8, maxLevel: 5, gated: true },
@@ -676,8 +834,8 @@ export const PAD_DEFS: PadDef[] = [
   { id: 'zone_tannery', x: 17.5, z: 6.5, label: 'Open Tannery', icon: '🧥', baseCost: 3750, costMult: 1, maxLevel: 1 },
   { id: 'tailor', x: 23.5, z: -2.6, label: 'Tailor', icon: '🧵', baseCost: 2100, costMult: 1, maxLevel: 1 },
   { id: 'coatRunner', x: 30, z: 4.5, label: 'Coat Runner', icon: '🏃', baseCost: 2400, costMult: 1.9, maxLevel: 2 },
-  { id: 'coat_up', x: 27.8, z: 11.5, label: 'Coat Stall +', icon: '⬆️', baseCost: 800, costMult: 1.6, maxLevel: 10, gated: true },
-  { id: 'tailor_up', x: 31.5, z: -2.6, label: 'Tailor +', icon: '⬆️', baseCost: 900, costMult: 1.6, maxLevel: 10, gated: true },
+  { id: 'coat_up', x: 27.8, z: 11.5, label: 'Coat Stall +', icon: '⬆️', baseCost: 800, costMult: 1.6, maxLevel: ENDLESS, gated: true },
+  { id: 'tailor_up', x: 31.5, z: -2.6, label: 'Tailor +', icon: '⬆️', baseCost: 900, costMult: 1.6, maxLevel: ENDLESS, gated: true },
   // conveyor belts (Level 5+): build, then speed them up
   { id: 'belt_wood', x: -7.6, z: -7.6, label: 'Log Belt', icon: '⚙️', baseCost: 4000, costMult: 2.2, maxLevel: 3, requires: ['lumberjack', 'logCarrier'] },
   { id: 'belt_meat', x: 13.6, z: 1.7, label: 'Food Belt', icon: '⚙️', baseCost: 5500, costMult: 2.2, maxLevel: 3, requires: ['cook', 'collector', 'runner'] },
@@ -688,14 +846,24 @@ export const PAD_DEFS: PadDef[] = [
   { id: 'fisher', x: -12.6, z: -17.6, label: 'Fisher', icon: '🎣', baseCost: 5000, costMult: 2, maxLevel: 3 },
   { id: 'smoker', x: -31.6, z: -9.4, label: 'Smoker', icon: '🔥', baseCost: 6000, costMult: 1, maxLevel: 1 },
   { id: 'fishRunner', x: -24.2, z: 6.8, label: 'Fish Runner', icon: '🏃', baseCost: 6500, costMult: 1.9, maxLevel: 2 },
-  { id: 'fish_up', x: -31.8, z: 6.6, label: 'Fish Stall +', icon: '⬆️', baseCost: 1600, costMult: 1.6, maxLevel: 10, gated: true },
-  { id: 'smoke_up', x: -32.2, z: -1.6, label: 'Smokehouse +', icon: '⬆️', baseCost: 1800, costMult: 1.6, maxLevel: 10, gated: true },
+  { id: 'fish_up', x: -31.8, z: 6.6, label: 'Fish Stall +', icon: '⬆️', baseCost: 1600, costMult: 1.6, maxLevel: ENDLESS, gated: true },
+  { id: 'smoke_up', x: -32.2, z: -1.6, label: 'Smokehouse +', icon: '⬆️', baseCost: 1800, costMult: 1.6, maxLevel: ENDLESS, gated: true },
   { id: 'belt_fish', x: -24.4, z: 0.6, label: 'Fish Belt', icon: '⚙️', baseCost: 11000, costMult: 2.2, maxLevel: 3, requires: ['fisher', 'smoker', 'fishRunner'] },
   // coal mine (Level 8)
   { id: 'zone_mine', x: 7.2, z: -11.5, label: 'Open Coal Mine', icon: '⛏️', baseCost: 40000, costMult: 1, maxLevel: 1, requires: ['fisher', 'smoker', 'fishRunner'] },
   { id: 'miner', x: 8.6, z: -17.6, label: 'Miner', icon: '⛏️', baseCost: 12000, costMult: 2, maxLevel: 3 },
   { id: 'coalCarrier', x: -5.3, z: -12.0, label: 'Coal Carrier', icon: '🪨', baseCost: 14000, costMult: 1.9, maxLevel: 2 },
-  { id: 'furnace_up', x: -1.9, z: -11.2, label: 'Furnace +', icon: '⬆️', baseCost: 6000, costMult: 1.6, maxLevel: 10, gated: true },
+  { id: 'furnace_up', x: -1.9, z: -11.2, label: 'Furnace +', icon: '⬆️', baseCost: 6000, costMult: 1.6, maxLevel: ENDLESS, gated: true },
+  // prestige: pack up and start a new camp for Frost Stars
+  { id: 'prestige', x: 5.4, z: 10.8, label: 'Move the Settlement', icon: '🧳', baseCost: 0, costMult: 1, maxLevel: ENDLESS, holdSeconds: 3 },
+  // machines (Level 5+): each replaces a full crew and brings its own belt
+  { id: 'm_saw', x: -11.2, z: -8.0, label: 'Auto-Saw', icon: '🪚', baseCost: 9000, costMult: 2.2, maxLevel: 3, requires: ['lumberjack', 'belt_wood@1'] },
+  { id: 'm_skinner', x: 25.5, z: -8.6, label: 'Skinning Machine', icon: '🔪', baseCost: 12000, costMult: 2.2, maxLevel: 3, requires: ['collector', 'tower'] },
+  { id: 'm_grill', x: 11.6, z: -11.6, label: 'Auto-Grill', icon: '🤖', baseCost: 10000, costMult: 2.2, maxLevel: 3, requires: ['cook', 'kitchen_up@5'] },
+  { id: 'm_sewer', x: 28.6, z: -4.2, label: 'Sewing Machine', icon: '🤖', baseCost: 16000, costMult: 2.2, maxLevel: 3, requires: ['tailor', 'tailor_up@3'] },
+  { id: 'm_auger', x: -15.8, z: -16.4, label: 'Ice Auger', icon: '🌀', baseCost: 24000, costMult: 2.2, maxLevel: 3, requires: ['fisher'] },
+  { id: 'm_autosmoker', x: -26.4, z: -9.2, label: 'Auto-Smoker', icon: '🤖', baseCost: 22000, costMult: 2.2, maxLevel: 3, requires: ['smoker', 'smoke_up@3'] },
+  { id: 'm_drill', x: -6.2, z: -15.4, label: 'Coal Drill', icon: '⛏️', baseCost: 50000, costMult: 2.2, maxLevel: 3, requires: ['miner', 'belt_coal@1'] },
   { id: 'belt_coal', x: 8.4, z: -10.6, label: 'Coal Belt', icon: '⚙️', baseCost: 16000, costMult: 2.2, maxLevel: 3, requires: ['miner', 'coalCarrier'] },
 ]
 

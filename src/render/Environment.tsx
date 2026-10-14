@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { WORLD } from '../game/balance'
 import { mulberry32, randRange } from '../game/util'
 import { useUI } from '../game/uiStore'
@@ -62,8 +63,8 @@ const pathMat = new THREE.MeshBasicMaterial({
 function Paths() {
   const patches: { x: number; z: number; sx: number; sz: number; rot?: number }[] = [
     { x: 0, z: 18, sx: 2.6, sz: 13 }, // entry road
-    { x: WORLD.woodStation.x, z: 8, sx: 1.6, sz: 6.5 }, // wood queue
-    { x: WORLD.meatStation.x, z: 8, sx: 1.6, sz: 6.5 }, // meat queue
+    { x: WORLD.woodStation.x, z: 12.5, sx: 1.6, sz: 10.5 }, // wood queue
+    { x: WORLD.meatStation.x, z: 12.5, sx: 1.6, sz: 10.5 }, // meat queue
     { x: WORLD.campfire.x, z: WORLD.campfire.z, sx: 4, sz: 3.4 },
     { x: WORLD.kitchen.x, z: WORLD.kitchen.z + 1, sx: 3.4, sz: 2.6 },
     { x: WORLD.towerSpot.x, z: WORLD.towerSpot.z, sx: 3, sz: 2.6 },
@@ -71,28 +72,24 @@ function Paths() {
     { x: WORLD.treeArea.x, z: WORLD.treeArea.z, sx: 6.4, sz: 6.4 },
     { x: -30, z: WORLD.caravanSpot.z + 0.8, sx: 17, sz: 2.2 }, // caravan road
     { x: WORLD.tailor.x, z: WORLD.tailor.z + 1, sx: 3.4, sz: 2.6 },
-    { x: WORLD.coatStation.x, z: WORLD.coatStation.z + 6, sx: 1.6, sz: 6.2 }, // coat queue
+    { x: WORLD.coatStation.x, z: WORLD.coatStation.z + 9.5, sx: 1.6, sz: 9.6 }, // coat queue
     { x: WORLD.fishStation.x, z: WORLD.fishStation.z + 6, sx: 1.6, sz: 6.2 }, // fish queue
     { x: WORLD.smokehouse.x, z: WORLD.smokehouse.z + 1, sx: 3.4, sz: 2.6 },
     { x: WORLD.furnace.x, z: WORLD.furnace.z + 1, sx: 3.2, sz: 3 },
     { x: WORLD.coalDepot.x, z: WORLD.coalDepot.z, sx: 2.6, sz: 2.2 },
   ]
-  return (
-    <group>
-      {patches.map((p, i) => (
-        <mesh
-          key={i}
-          position={[p.x, 0.012 + i * 0.0004, p.z]}
-          rotation-x={-Math.PI / 2}
-          scale={[p.sx, p.sz, 1]}
-          material={pathMat}
-          renderOrder={1}
-        >
-          <circleGeometry args={[1, 24]} />
-        </mesh>
-      ))}
-    </group>
-  )
+  // one merged mesh for every trampled patch (a draw call each adds up on phones)
+  const geo = useMemo(() => {
+    const parts = patches.map((p, i) => {
+      const g = new THREE.CircleGeometry(1, 24)
+      g.scale(p.sx, p.sz, 1)
+      g.rotateX(-Math.PI / 2)
+      g.translate(p.x, 0.012 + i * 0.0004, p.z)
+      return g
+    })
+    return mergeGeometries(parts)!
+  }, [])
+  return <mesh geometry={geo} material={pathMat} renderOrder={1} />
 }
 
 // ---------- instanced pine forest ----------
@@ -271,20 +268,28 @@ function Mountains() {
     }
     return out
   }, [])
+  // all the background peaks in two merged meshes (rock + snow caps)
+  const { rock, snow } = useMemo(() => {
+    const rocks: THREE.BufferGeometry[] = []
+    const caps: THREE.BufferGeometry[] = []
+    for (const mt of items) {
+      const r = new THREE.ConeGeometry(mt.r, mt.h, 6)
+      r.translate(mt.x, mt.h * 0.5, mt.z)
+      rocks.push(r)
+      const c = new THREE.ConeGeometry(mt.r * 0.38, mt.h * 0.36, 6)
+      c.translate(mt.x, mt.h * 0.82, mt.z)
+      caps.push(c)
+    }
+    return { rock: mergeGeometries(rocks)!, snow: mergeGeometries(caps)! }
+  }, [items])
   return (
     <group>
-      {items.map((mt, i) => (
-        <group key={i} position={[mt.x, 0, mt.z]}>
-          <mesh position-y={mt.h * 0.5}>
-            <coneGeometry args={[mt.r, mt.h, 6]} />
-            <meshStandardMaterial color="#aebccf" roughness={1} flatShading />
-          </mesh>
-          <mesh position-y={mt.h * 0.82}>
-            <coneGeometry args={[mt.r * 0.38, mt.h * 0.36, 6]} />
-            <meshStandardMaterial color="#eff4fa" roughness={0.9} flatShading />
-          </mesh>
-        </group>
-      ))}
+      <mesh geometry={rock}>
+        <meshStandardMaterial color="#aebccf" roughness={1} flatShading />
+      </mesh>
+      <mesh geometry={snow}>
+        <meshStandardMaterial color="#eff4fa" roughness={0.9} flatShading />
+      </mesh>
     </group>
   )
 }

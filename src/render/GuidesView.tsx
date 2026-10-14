@@ -1,5 +1,6 @@
 // Chevrons on the ground around the player pointing at what matters right
-// now: gold = current objective, red = raiding wolf, teal = waiting caravan.
+// now: gold = current objective, red = raiding wolf, teal = waiting caravan,
+// blue = where the stack you're carrying belongs.
 
 import { useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
@@ -7,13 +8,14 @@ import * as THREE from 'three'
 import { sim } from '../game/state'
 import type { Guide } from '../game/types'
 
-const POOL = 3
+const POOL = 4
 const RADIUS = 1.9
 
 const MATS: Record<Guide['color'], THREE.MeshBasicMaterial> = {
   gold: new THREE.MeshBasicMaterial({ color: '#ffd75e', transparent: true, opacity: 0.9, depthWrite: false }),
   red: new THREE.MeshBasicMaterial({ color: '#ff5a4a', transparent: true, opacity: 0.9, depthWrite: false }),
   teal: new THREE.MeshBasicMaterial({ color: '#7fe0ff', transparent: true, opacity: 0.9, depthWrite: false }),
+  blue: new THREE.MeshBasicMaterial({ color: '#6f9bff', transparent: true, opacity: 0.95, depthWrite: false }),
 }
 
 export function GuidesView() {

@@ -14,6 +14,8 @@ import type {
   BeltId,
   BeltSim,
   CashBeltSim,
+  MachineId,
+  MachineSim,
   V2,
 } from './types'
 import {
@@ -24,14 +26,17 @@ import {
   NODES,
   HOLE_SPOTS,
   SEAM_SPOTS,
-  BELT_IDS,
+  ALL_BELT_IDS,
   BELT_CFG,
+  MACHINE_IDS,
+  MACHINE_CFG,
   CASH_PATHS,
   STATION_IDS,
   ANIMALS,
   CARAVAN,
   CUSTOMERS,
   WORKERS,
+  ECONOMY,
   PAD_DEFS,
   PILES,
   padCost,
@@ -208,6 +213,8 @@ function makePads(): PadSim[] {
     maxLevel: d.maxLevel,
     pulse: 0,
     hold: 0,
+    holdNeed: d.holdSeconds ?? ECONOMY.padHoldSeconds,
+    streak: 0,
   }))
 }
 
@@ -287,7 +294,13 @@ export function createSim(): Sim {
     chest: { pos: { x: WORLD.chest.x, z: WORLD.chest.z } },
     depot: { pos: { x: WORLD.logDepot.x, z: WORLD.logDepot.z }, count: 0, cap: WORKERS.depotCap, kind: 'log' },
     coalDepot: { pos: { x: WORLD.coalDepot.x, z: WORLD.coalDepot.z }, count: 0, cap: WORKERS.coalDepotCap, kind: 'coal' },
-    belts: Object.fromEntries(BELT_IDS.map((id) => [id, makeBelt(id)])) as Record<BeltId, BeltSim>,
+    belts: Object.fromEntries(ALL_BELT_IDS.map((id) => [id, makeBelt(id)])) as Record<BeltId, BeltSim>,
+    machines: Object.fromEntries(
+      MACHINE_IDS.map((id) => [
+        id,
+        { id, level: 0, pos: { ...MACHINE_CFG[id].pos }, yaw: 0, workT: 0, target: -1, buf: {}, spin: 0, active: false },
+      ]),
+    ) as Record<MachineId, MachineSim>,
     cash: {
       level: 0,
       belts: Object.fromEntries(STATION_IDS.map((id) => [id, makeCashBelt(id)])) as Record<StationId, CashBeltSim>,
@@ -352,6 +365,14 @@ export function createSim(): Sim {
     banners: [],
     banner: { text: '', sub: '', tone: 'info', id: 0 },
     bannerT: 0,
+    meta: { stars: 0, runs: 0, bestLevel: 1, doubleDay: '' },
+    incomeRate: 0,
+    rateT: 0,
+    rateEarned: 0,
+    lastWall: 0,
+    offline: null,
+    moving: 0,
+    movingStars: 0,
   }
   for (let i = 0; i < ANIMALS.deerCount; i++) spawnAnimal(sim, 'deer')
   for (let i = 0; i < ANIMALS.rabbitCount; i++) spawnAnimal(sim, 'rabbit')
