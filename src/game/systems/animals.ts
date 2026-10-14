@@ -148,7 +148,7 @@ function bearSwipe(sim: Sim, a: AnimalSim) {
   const dx = p.pos.x - a.pos.x
   const dz = p.pos.z - a.pos.z
   const d = Math.hypot(dx, dz) || 1
-  // ⚡ Monster Power makes you harder to bat away
+  // the Laser Blaster level also makes you harder to bat away
   const tough = Math.max(0, 1 - PLAYER.slayKnockbackCut * p.slayLvl)
   const k = (isBoss(a.kind) ? BOSS[a.kind].knockback : ANIMALS.bearKnockback) * tough
   p.pos.x += (dx / d) * k

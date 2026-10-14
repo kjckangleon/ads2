@@ -11,7 +11,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { sim } from '../game/state'
 import type { CashBeltId } from '../game/types'
-import { BELT, CASH_BELT, CASH_BELT_IDS, beltSpeed } from '../game/balance'
+import { BELT, CASH_BELT, CASH_BELT_IDS, cashBeltSpeed } from '../game/balance'
 import { cashPoint, cashBeltOn } from '../game/systems/belts'
 import { billGeo, billMat } from './PilesView'
 import { railMats } from './BeltsView'
@@ -106,7 +106,7 @@ export function CashBeltsView() {
     const v = st.baked
     if (!v) return
     st.top.tex.offset.y -=
-      (beltSpeed(cash.level) * CASH_BELT.speedMult * beltPerkMult(sim) * Math.min(dt, 0.05)) / STRIPE
+      (Math.min(CASH_BELT.maxSpeed, cashBeltSpeed(cash.level) * beltPerkMult(sim)) * Math.min(dt, 0.05)) / STRIPE
     if (st.lvl !== cash.level) {
       st.lvl = cash.level
       for (const r of v.rails) r.material = railMats[Math.min(railMats.length - 1, cash.level - 1)]

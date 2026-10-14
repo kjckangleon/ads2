@@ -160,18 +160,29 @@ export const PLAYER = {
   flyBoostMax: 2.3,
   /** Jetpack upgrades stop here (that's the 2.3× cap) */
   flyMaxLevel: 8,
-  /** ⚡ Monster Power: damage multiplier per level vs wolves, bears, goats and bosses */
+  /** 🔫 Laser Blaster: fires on its own at the nearest wolf, bear, goat or boss in range */
   slayLevel: 7,
+  /** damage per shot = Sharp Axe hit × (1 + this × level) */
   slayDmgPerLvl: 1,
-  /** every hit also sends out a shockwave this wide (grows per level), at this share of the damage */
-  slayRadius: 2.8,
-  slayRadiusPerLvl: 0.35,
-  slayWaveFrac: 0.6,
-  /** extra reach toward monsters, per level (capped) */
-  slayReachPerLvl: 0.25,
-  slayReachMax: 2.5,
+  /** seconds between shots at Lv1, ×this per level, never faster than laserMinCd */
+  laserCd: 0.7,
+  laserCdMult: 0.9,
+  laserMinCd: 0.15,
+  /** reach (m) at Lv1, + per level, capped */
+  laserRange: 9,
+  laserRangePerLvl: 0.6,
+  laserRangeMax: 15,
+  /** the beam pierces: everything this close to its line is hit */
+  laserWidth: 0.8,
   /** less knocked about by bears and bosses: −this share per level */
   slayKnockbackCut: 0.3,
+}
+
+export function laserCooldown(lvl: number) {
+  return Math.max(PLAYER.laserMinCd, PLAYER.laserCd * Math.pow(PLAYER.laserCdMult, Math.max(0, lvl - 1)))
+}
+export function laserRange(lvl: number) {
+  return Math.min(PLAYER.laserRangeMax, PLAYER.laserRange + PLAYER.laserRangePerLvl * Math.max(0, lvl - 1))
 }
 
 /** 🚀 how much faster the Jetpack makes you (1 without it) */
@@ -1031,12 +1042,25 @@ export const BELT_RETIRES: Record<PadBeltId, WorkerRole> = {
 export const CASH_BELT = {
   /** height the bundles ride at (clears the stall roofs) */
   height: 3.4,
-  /** each bundle takes this share of the pile (at least one bill) */
-  chunkFrac: 0.25,
-  /** cash belts run this much faster than item belts of the same level */
-  speedMult: 2,
+  /** each bundle takes this share of the pile (at least one bill), more with every level */
+  chunkFrac: 0.2,
+  chunkPerLvl: 0.04,
+  chunkMax: 0.6,
+  /** bundles glide at an easy-to-watch pace: upgrades add speed only up to this (m/s)... */
+  speed: 2.6,
+  speedPerLvl: 0.35,
+  maxSpeed: 4.5,
   /** caravan pay has no belt: it's banked straight into the chest at this rate once belts run */
   bankRate: 400,
+}
+
+/** how fast cash bundles ride at this cash belt level (capped so it stays nice to watch) */
+export function cashBeltSpeed(level: number) {
+  return Math.min(CASH_BELT.maxSpeed, CASH_BELT.speed + CASH_BELT.speedPerLvl * Math.max(0, level - 1))
+}
+/** ...and past that, each level makes the bundles bigger, so a belt still moves more cash */
+export function cashChunkFrac(level: number) {
+  return Math.min(CASH_BELT.chunkMax, CASH_BELT.chunkFrac + CASH_BELT.chunkPerLvl * Math.max(0, level - 1))
 }
 
 export const CASH_BELT_IDS: CashBeltId[] = ['wood', 'meat', 'coat', 'fish', 'heat', 'bounty', 'dock', 'port', 'air']
@@ -1470,8 +1494,8 @@ export const PAD_DEFS: PadDef[] = [
     id: 'p_slayer',
     x: 0,
     z: 13.4,
-    label: 'Monster Power',
-    icon: '⚡',
+    label: 'Laser Blaster',
+    icon: '🔫',
     baseCost: 25000,
     costMult: 2.2,
     maxLevel: ENDLESS,

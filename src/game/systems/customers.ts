@@ -165,7 +165,7 @@ function handOver(sim: Sim, c: CustomerSim, st: StationSim) {
     })
   }
   if (c.got < c.want) {
-    sfx.unstack(c.got)
+    sfx.serve()
     return
   }
   serve(sim, c, st)

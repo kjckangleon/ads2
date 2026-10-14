@@ -296,6 +296,8 @@ export function createSim(): Sim {
       flyLvl: 0,
       flying: true,
       slayLvl: 0,
+      laserT: 0,
+      beams: [],
       carryCap: playerCarry(0),
       speed: playerSpeed(0),
       spdLvl: 0,

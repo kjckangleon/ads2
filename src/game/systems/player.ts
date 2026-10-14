@@ -16,6 +16,8 @@ import {
   playerChopTime,
   playerDamage,
   flyMult,
+  laserCooldown,
+  laserRange,
   nodeRegrow,
 } from '../balance'
 import { input, pollInput } from '../input'
@@ -156,8 +158,26 @@ function move(sim: Sim, dt: number) {
         p.dustT = PLAYER.dustInterval * 0.5
         const bx = p.pos.x - mx * 0.9
         const bz = p.pos.z - mz * 0.9
-        sim.fx.push({ t: 'burst', x: bx, y: PLAYER.flyHover + 0.5, z: bz, color: '#ffc37a', n: 2, spread: 0.12, up: 0.2 })
-        sim.fx.push({ t: 'burst', x: bx, y: PLAYER.flyHover + 0.4, z: bz, color: '#eef3fa', n: 2, spread: 0.25, up: 0.4 })
+        sim.fx.push({
+          t: 'burst',
+          x: bx,
+          y: PLAYER.flyHover + 0.5,
+          z: bz,
+          color: '#ffc37a',
+          n: 2,
+          spread: 0.12,
+          up: 0.2,
+        })
+        sim.fx.push({
+          t: 'burst',
+          x: bx,
+          y: PLAYER.flyHover + 0.4,
+          z: bz,
+          color: '#eef3fa',
+          n: 2,
+          spread: 0.25,
+          up: 0.4,
+        })
       } else {
         p.dustT = PLAYER.dustInterval
         sim.fx.push({ t: 'burst', x: p.pos.x, y: 0.12, z: p.pos.z, color: '#f4f8ff', n: 2, spread: 0.18, up: 0.9 })
@@ -256,17 +276,11 @@ function gather(sim: Sim, dt: number) {
   if (n.wood <= 0) n.regrowT = nodeRegrow(type, sim.rep.level)
 }
 
-/** wolves, bears, goats and bosses: what ⚡ Monster Power is for */
-const isMonster = (a: AnimalSim) => a.kind === 'bear' || a.kind === 'goat' || isBoss(a.kind)
-
 function fight(sim: Sim, dt: number) {
   const p = sim.player
-  const slay = p.slayLvl
-  // ⚡ reach further toward monsters
-  const reach = slay > 0 ? Math.min(PLAYER.slayReachMax, PLAYER.slayReachPerLvl * slay + 0.5) : 0
   // wolves take priority over game
   let wolf: WolfSim | null = null
-  let bw = PLAYER.interactRange + 0.4 + reach
+  let bw = PLAYER.interactRange + 0.4
   for (const w of sim.wolves) {
     const d = dist(p.pos, w.pos)
     if (d < bw) {
@@ -278,7 +292,7 @@ function fight(sim: Sim, dt: number) {
   if (!wolf) {
     let ba = PLAYER.interactRange
     for (const a of sim.animals) {
-      const d = dist(p.pos, a.pos) - (isMonster(a) ? reach : 0)
+      const d = dist(p.pos, a.pos)
       if (d < ba) {
         ba = d
         prey = a
@@ -296,30 +310,94 @@ function fight(sim: Sim, dt: number) {
   p.attackT = 0
   p.swing = 0.25
   const dmg = playerDamage(p.powerLvl)
-  const monsterDmg = dmg * (1 + PLAYER.slayDmgPerLvl * slay)
   sfx.thud()
-  if (wolf) damageWolf(sim, wolf, monsterDmg)
-  else if (prey) hurtAnimal(sim, prey, isMonster(prey) ? monsterDmg : dmg, false)
-  if (slay > 0 && (wolf || (prey && isMonster(prey)))) shockwave(sim, target, monsterDmg * PLAYER.slayWaveFrac)
+  if (wolf) {
+    damageWolf(sim, wolf, dmg)
+    return
+  }
+  if (prey) hurtAnimal(sim, prey, dmg, false)
 }
 
-/** ⚡ Monster Power: every hit on a monster ripples out and hits every other monster nearby */
-function shockwave(sim: Sim, hit: WolfSim | AnimalSim, dmg: number) {
+/** wolves, bears, goats and bosses: what the 🔫 Laser Blaster shoots at */
+const isMonster = (a: AnimalSim) => a.kind === 'bear' || a.kind === 'goat' || isBoss(a.kind)
+
+const BEAM_LIFE = 0.16
+
+/** squared distance from point q to the segment a-b */
+function segDist(q: V2, ax: number, az: number, bx: number, bz: number) {
+  const dx = bx - ax
+  const dz = bz - az
+  const l = dx * dx + dz * dz || 1
+  const t = Math.max(0, Math.min(1, ((q.x - ax) * dx + (q.z - az) * dz) / l))
+  return Math.hypot(q.x - ax - dx * t, q.z - az - dz * t)
+}
+
+/**
+ * 🔫 Laser Blaster: every so often you fire a beam at the nearest monster in
+ * range. It pierces, hitting every monster along the line out to full range.
+ */
+function laser(sim: Sim, dt: number) {
   const p = sim.player
-  const r = PLAYER.slayRadius + PLAYER.slayRadiusPerLvl * p.slayLvl
-  for (const w of [...sim.wolves]) if (w !== hit && dist(w.pos, p.pos) < r) damageWolf(sim, w, dmg)
-  for (const a of [...sim.animals])
-    if (a !== hit && isMonster(a) && a.hp > 0 && dist(a.pos, p.pos) < r) hurtAnimal(sim, a, dmg, false)
+  for (let i = p.beams.length - 1; i >= 0; i--) {
+    p.beams[i].t -= dt
+    if (p.beams[i].t <= 0) p.beams.splice(i, 1)
+  }
+  const lvl = p.slayLvl
+  if (lvl <= 0) return
+  if (p.laserT > 0) p.laserT -= dt
+  if (p.laserT > 0) return
+  const range = laserRange(lvl)
+  let target: V2 | null = null
+  let best = range
+  for (const w of sim.wolves) {
+    const d = dist(p.pos, w.pos)
+    if (d < best) {
+      best = d
+      target = w.pos
+    }
+  }
+  for (const a of sim.animals) {
+    if (!isMonster(a)) continue
+    const d = dist(p.pos, a.pos)
+    if (d < best) {
+      best = d
+      target = a.pos
+    }
+  }
+  if (!target) return
+  p.laserT = laserCooldown(lvl)
+  const dx = (target.x - p.pos.x) / (best || 1)
+  const dz = (target.z - p.pos.z) / (best || 1)
+  const ex = p.pos.x + dx * range
+  const ez = p.pos.z + dz * range
+  const dmg = playerDamage(p.powerLvl) * (1 + PLAYER.slayDmgPerLvl * lvl)
+  let hits = 0
+  for (const w of [...sim.wolves]) {
+    if (segDist(w.pos, p.pos.x, p.pos.z, ex, ez) < PLAYER.laserWidth) {
+      damageWolf(sim, w, dmg)
+      hits++
+    }
+  }
+  for (const a of [...sim.animals]) {
+    if (!isMonster(a) || a.hp <= 0) continue
+    if (segDist(a.pos, p.pos.x, p.pos.z, ex, ez) < PLAYER.laserWidth) {
+      hurtAnimal(sim, a, dmg, false)
+      hits++
+    }
+  }
+  if (!p.moving) p.yaw = Math.atan2(dx, dz)
+  p.beams.push({ x0: p.pos.x, z0: p.pos.z, x1: ex, z1: ez, t: BEAM_LIFE })
   sim.fx.push({
     t: 'burst',
-    x: p.pos.x,
-    y: 0.5,
-    z: p.pos.z,
-    color: '#9fe8ff',
-    n: 10 + 2 * Math.min(10, p.slayLvl),
-    spread: r * 0.6,
-    up: 1.2,
+    x: target.x,
+    y: 1.0,
+    z: target.z,
+    color: '#ff6a5a',
+    n: 6 + Math.min(hits, 6) * 2,
+    spread: 0.6,
+    up: 1.6,
   })
+  sfx.laser()
 }
 
 function pickUpDrops(sim: Sim) {
@@ -555,6 +633,7 @@ export function updatePlayer(sim: Sim, dt: number) {
   if (p.swing > 0) p.swing -= dt
   gather(sim, dt)
   fight(sim, dt)
+  laser(sim, dt)
   pickUpDrops(sim)
   depositAndTake(sim)
   useDepot(sim, sim.depot, automated(sim, 'logCarrier'))

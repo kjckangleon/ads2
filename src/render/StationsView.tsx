@@ -112,11 +112,13 @@ function buildStall(id: StationId, withLight: boolean): Stall {
   root.add(snow)
 
   const sign = makeEmojiSprite(style.sign, 1.1)
-  sign.position.set(0, 3.3, 0)
+  sign.position.set(0, 4.2, 0)
   root.add(sign)
 
-  const label = new TextLabel(0.85)
-  label.sprite.position.set(0, 1.7, 0.2)
+  // the stock count sits on top of the roof, where the camera can see it
+  const label = new TextLabel(0.95)
+  label.sprite.position.set(0, 3.2, 0.1)
+  label.sprite.renderOrder = 6
   root.add(label.sprite)
 
   const stockGrid = makeStockGrid(id)
@@ -197,7 +199,7 @@ function buildStall(id: StationId, withLight: boolean): Stall {
   goldBar.position.set(0, 0.96, 0.66)
   trim.add(goldBar)
   const star = makeEmojiSprite('⭐', 0.6)
-  star.position.set(0.85, 3.4, 0)
+  star.position.set(1.15, 4.3, 0)
   trim.add(star)
   deco.push({ lvl: 7, obj: trim })
 

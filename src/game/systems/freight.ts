@@ -135,7 +135,7 @@ function loadFrom(sim: Sim, t: TerminalSim, v: VehicleSim, dt: number, speed = 1
       })
     }
   }
-  if (moved) sfx.deposit()
+  if (moved) sfx.beltDrop()
   return moved
 }
 

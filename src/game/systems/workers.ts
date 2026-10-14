@@ -137,7 +137,7 @@ function updateCollector(sim: Sim, w: WorkerSim, dt: number) {
       if (transferTick(w, dt)) {
         w.carry.pop()
         pr.inCount++
-        sfx.deposit()
+        sfx.beltDrop()
         sim.fx.push({
           t: 'itemfly',
           kind,
@@ -186,7 +186,7 @@ function updateCollector(sim: Sim, w: WorkerSim, dt: number) {
       const idx = sim.drops.indexOf(myDrop)
       if (idx !== -1) sim.drops.splice(idx, 1)
       w.carry.push(myDrop.kind)
-      sfx.pick()
+      sfx.softPick()
       if (w.carry.length >= cap) w.mode = 'deliver'
     }
     return
@@ -239,7 +239,7 @@ function updateHauler(sim: Sim, w: WorkerSim, dt: number, src: Source, sink: Sin
       if (transferTick(w, dt)) {
         const k = w.carry.pop()!
         sink.put()
-        sfx.deposit()
+        sfx.beltDrop()
         sim.fx.push({ t: 'itemfly', kind: k, from: { x: w.pos.x, y: 1.6, z: w.pos.z }, to: sink.to })
         if (w.carry.length === 0) w.mode = 'fetch'
       }
@@ -255,7 +255,7 @@ function updateHauler(sim: Sim, w: WorkerSim, dt: number, src: Source, sink: Sin
     if (walk(sim, w, src.at, dt, 0.6) && transferTick(w, dt)) {
       src.take()
       w.carry.push(src.kind)
-      sfx.pick()
+      sfx.softPick()
       if (w.carry.length >= cap) w.mode = 'deliver'
     }
     return
@@ -287,7 +287,7 @@ function updateCashier(sim: Sim, w: WorkerSim, dt: number) {
         color: '#ffd75e',
       })
       for (let i = 0; i < 3; i++) sim.fx.push({ t: 'coin', x: sim.chest.pos.x, y: 0.6, z: sim.chest.pos.z })
-      sfx.coin()
+      sfx.softCoin()
       w.coins = 0
       w.mode = 'fetch'
     }
@@ -316,7 +316,7 @@ function updateCashier(sim: Sim, w: WorkerSim, dt: number) {
       w.coins += take
       pile.claimedBy = null
       if (take > 0) {
-        sfx.coin()
+        sfx.softCoin()
         sim.fx.push({ t: 'burst', x: pile.pos.x, y: 0.6, z: pile.pos.z, color: '#ffd75e', n: 6, spread: 0.5 })
       }
       if (w.coins >= tripMax) w.mode = 'deliver'
@@ -372,7 +372,7 @@ function updateGatherer(sim: Sim, w: WorkerSim, dt: number, cfg: GatherCfg) {
       if (transferTick(w, dt)) {
         const k = w.carry.pop()!
         sink.put()
-        sfx.deposit()
+        sfx.beltDrop()
         sim.fx.push({ t: 'itemfly', kind: k, from: { x: w.pos.x, y: 1.6, z: w.pos.z }, to: sink.to })
         if (w.carry.length === 0) w.mode = 'fetch'
       }
@@ -416,7 +416,7 @@ function updateGatherer(sim: Sim, w: WorkerSim, dt: number, cfg: GatherCfg) {
         w.carry.push(cfg.kind)
         if (cfg.kind === 'log') sfx.chop()
         else if (cfg.kind === 'coal') sfx.thud()
-        else sfx.pick()
+        else sfx.softPick()
         if (node.wood <= 0) {
           node.regrowT = regrowTime(sim, cfg.kind)
           node.reservedBy = null

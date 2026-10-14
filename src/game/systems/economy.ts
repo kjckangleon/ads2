@@ -599,7 +599,7 @@ export function applyPad(sim: Sim, pad: PadSim) {
       p.slayLvl++
       sim.fx.push({ t: 'burst', x: p.pos.x, y: 1.2, z: p.pos.z, color: '#9fe8ff', n: 26, spread: 2, up: 3 })
       if (p.slayLvl === 1)
-        banner(sim, '⚡ Monster Power!', 'Every hit sends a shockwave through wolves, bears and bosses', 'good')
+        banner(sim, '🔫 Laser Blaster!', 'You fire at wolves, bears, goats and bosses on your own', 'good')
       sfx.build()
       break
     }

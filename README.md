@@ -216,11 +216,12 @@ products that vehicles come to buy. The frozen camp becomes its supply chain.
   buildings, trees and the caravan; locked district walls still stop you.
   You lean into the flight like a superhero. The 🚀 / 🏃 button switches
   between flying and walking.
-- **⚡ Monster Power** (Level 7+, needs the Sharp Axe maxed, endless levels).
-  Each level adds one full Sharp Axe hit of damage against wolves, bears,
-  goats and bosses. Every hit also sends a shockwave through all monsters
-  around you, you reach them from further away, and bears and bosses knock
-  you back less (not at all from Level 4).
+- **🔫 Laser Blaster** (Level 7+, needs the Sharp Axe maxed, endless levels).
+  You fire a laser on your own at the nearest wolf, bear, goat or boss in
+  range. The beam pierces: it hits every monster along its line. Each level
+  adds a Sharp Axe hit of damage per shot, fires faster (down to 0.15 s) and
+  reaches further (9 m, up to 15 m). Bears and bosses also knock you back
+  less (not at all from Level 4).
 
 ## Frost Stars late game
 
@@ -248,6 +249,11 @@ keep your progress when you move:
 - **Belt cap.** Item and cash belts upgrade up to Lv10 (about 12 m/s). Past
   that a belt would outrun what feeds it. Cash belts run twice as fast as item
   belts and carry bigger bundles, so cash doesn't pile up.
+- **Calmer sound.** Every sound has a minimum gap and there's a per-second
+  budget, so a fully automated camp hums instead of machine-gunning. What
+  the camp does on its own (belts, crew, customers, the tower) uses a quieter,
+  rarer "ambient" voice; big moments (buying, level-ups, events) always play.
+- **Stall counts** sit above the roof so you can read them from the camera.
 - **Sound on phones.** Every tap restarts audio if the phone paused it
   (backgrounding, the lock screen or a call). On iPhone, the silent switch
   also mutes the game.

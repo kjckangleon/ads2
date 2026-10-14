@@ -74,9 +74,25 @@ export function isMuted() {
   return muted
 }
 
-function throttled(key: string, minGap: number): boolean {
+/**
+ * Sound budget. Each sound has its own minimum gap, and on top of that only so
+ * many play per second overall, so a fully automated camp hums instead of
+ * machine-gunning. 'ambient' = things the camp does on its own (belts, crew,
+ * customers, tower): quieter and rarer. 'priority' = big moments (always play).
+ */
+type Voice = 'player' | 'ambient' | 'priority'
+const BUDGET: Record<Exclude<Voice, 'priority'>, number> = { player: 6, ambient: 3 }
+const recent: Record<Exclude<Voice, 'priority'>, number[]> = { player: [], ambient: [] }
+
+function throttled(key: string, minGap: number, voice: Voice = 'player'): boolean {
   const now = performance.now()
   if (lastPlayed[key] && now - lastPlayed[key] < minGap * 1000) return true
+  if (voice !== 'priority') {
+    const list = recent[voice]
+    while (list.length && now - list[0] > 1000) list.shift()
+    if (list.length >= BUDGET[voice]) return true
+    list.push(now)
+  }
   lastPlayed[key] = now
   return false
 }
@@ -185,8 +201,34 @@ function chord(freqs: number[], step: number, dur: number, type: OscillatorType,
 }
 
 export const sfx = {
+  /** 🔫 laser shot: a quick falling zap */
+  laser() {
+    if (throttled('laser', 0.12)) return
+    tone(1500, 0.12, { type: 'sawtooth', vol: 0.05, slide: -1100 })
+    tone(2600, 0.06, { type: 'square', vol: 0.02 })
+  },
+  /** a belt or a worker drops something off: soft and rare */
+  beltDrop() {
+    if (throttled('beltDrop', 0.3, 'ambient')) return
+    tone(420, 0.05, { type: 'triangle', vol: 0.045, slide: 120 })
+  },
+  /** a stall hands an item to a customer */
+  serve() {
+    if (throttled('serve', 0.22, 'ambient')) return
+    tone(560, 0.04, { type: 'triangle', vol: 0.045, slide: -40 })
+  },
+  /** a worker picks something up */
+  softPick() {
+    if (throttled('softPick', 0.3, 'ambient')) return
+    tone(660, 0.05, { type: 'triangle', vol: 0.045, slide: 160 })
+  },
+  /** cash the crew or a belt banks on its own */
+  softCoin() {
+    if (throttled('softCoin', 0.35, 'ambient')) return
+    tone(1320, 0.05, { type: 'square', vol: 0.02 })
+  },
   coin() {
-    if (throttled('coin', 0.05)) return
+    if (throttled('coin', 0.1)) return
     coinFlip = !coinFlip
     const f = coinFlip ? 1320 : 1568
     tone(f, 0.06, { type: 'square', vol: 0.045 })
@@ -194,100 +236,100 @@ export const sfx = {
   },
   /** item lands on a stack — pitch climbs with stack height */
   stack(n: number) {
-    if (throttled('stack', 0.035)) return
-    tone(480 + Math.min(n, 30) * 26, 0.05, { type: 'triangle', vol: 0.09, slide: 120 })
+    if (throttled('stack', 0.07)) return
+    tone(480 + Math.min(n, 16) * 22, 0.05, { type: 'triangle', vol: 0.09, slide: 120 })
   },
   /** item leaves a stack — pitch falls as it empties */
   unstack(n: number) {
-    if (throttled('unstack', 0.035)) return
-    tone(380 + Math.min(n, 30) * 22, 0.045, { type: 'triangle', vol: 0.08, slide: -60 })
+    if (throttled('unstack', 0.07)) return
+    tone(380 + Math.min(n, 16) * 18, 0.045, { type: 'triangle', vol: 0.08, slide: -60 })
   },
   whoosh() {
-    if (throttled('whoosh', 0.25)) return
+    if (throttled('whoosh', 0.25, 'priority')) return
     noise(0.18, { vol: 0.12, freq: 1600, q: 0.7 })
   },
   pop() {
-    if (throttled('pop', 0.05)) return
+    if (throttled('pop', 0.15, 'ambient')) return
     tone(520, 0.09, { type: 'triangle', vol: 0.14, slide: 300 })
   },
   chop() {
-    if (throttled('chop', 0.08)) return
+    if (throttled('chop', 0.12)) return
     noise(0.09, { vol: 0.28, freq: 320, q: 1.2 })
     tone(140, 0.08, { type: 'triangle', vol: 0.16, slide: -60 })
   },
   thud() {
-    if (throttled('thud', 0.08)) return
+    if (throttled('thud', 0.1)) return
     noise(0.08, { vol: 0.24, freq: 200, q: 1 })
     tone(90, 0.1, { type: 'sine', vol: 0.2, slide: -40 })
   },
   thwip() {
-    if (throttled('thwip', 0.05)) return
+    if (throttled('thwip', 0.18, 'ambient')) return
     noise(0.06, { vol: 0.16, freq: 2400, q: 2 })
     tone(700, 0.05, { type: 'sawtooth', vol: 0.03, slide: -400 })
   },
   hit() {
-    if (throttled('hit', 0.05)) return
+    if (throttled('hit', 0.08)) return
     noise(0.06, { vol: 0.2, freq: 900, q: 1.4 })
   },
   kill() {
-    if (throttled('kill', 0.1)) return
+    if (throttled('kill', 0.12)) return
     tone(300, 0.14, { type: 'triangle', vol: 0.14, slide: -160 })
     noise(0.12, { vol: 0.14, freq: 500 })
   },
   pick() {
-    if (throttled('pick', 0.06)) return
+    if (throttled('pick', 0.1)) return
     tone(660, 0.06, { type: 'triangle', vol: 0.1, slide: 200 })
   },
   deposit() {
-    if (throttled('deposit', 0.06)) return
+    if (throttled('deposit', 0.12)) return
     tone(420, 0.06, { type: 'triangle', vol: 0.1, slide: 140 })
   },
   sizzle() {
-    if (throttled('sizzle', 0.4)) return
+    if (throttled('sizzle', 0.6, 'ambient')) return
     noise(0.3, { vol: 0.05, freq: 4000, q: 0.6 })
   },
   buy() {
-    if (throttled('buy', 0.2)) return
+    if (throttled('buy', 0.2, 'priority')) return
     tone(523, 0.12, { type: 'triangle', vol: 0.14 })
     tone(659, 0.12, { type: 'triangle', vol: 0.14, delay: 0.08 })
     tone(784, 0.2, { type: 'triangle', vol: 0.14, delay: 0.16 })
   },
   build() {
-    if (throttled('build', 0.2)) return
+    if (throttled('build', 0.2, 'priority')) return
     noise(0.25, { vol: 0.25, freq: 250, q: 0.8 })
     tone(120, 0.25, { type: 'sine', vol: 0.2, slide: -40 })
   },
   milestone() {
-    if (throttled('milestone', 0.5)) return
+    if (throttled('milestone', 0.5, 'priority')) return
     tone(523, 0.15, { type: 'sine', vol: 0.16 })
     tone(659, 0.15, { type: 'sine', vol: 0.16, delay: 0.1 })
     tone(784, 0.15, { type: 'sine', vol: 0.16, delay: 0.2 })
     tone(1046, 0.3, { type: 'sine', vol: 0.16, delay: 0.3 })
   },
   tick() {
-    if (throttled('tick', 0.09)) return
+    if (throttled('tick', 0.12)) return
     tone(980, 0.04, { type: 'square', vol: 0.03 })
   },
   tip() {
-    if (throttled('tip', 0.08)) return
+    if (throttled('tip', 0.15, 'ambient')) return
     tone(1320, 0.06, { type: 'square', vol: 0.035 })
     tone(1760, 0.09, { type: 'square', vol: 0.035, delay: 0.05 })
   },
   combo() {
-    if (throttled('combo', 0.3)) return
+    if (throttled('combo', 0.3, 'priority')) return
     chord([660, 880, 1100, 1320], 0.06, 0.14, 'triangle', 0.12)
   },
   angry() {
-    if (throttled('angry', 0.25)) return
+    if (throttled('angry', 0.25, 'priority')) return
     tone(190, 0.22, { type: 'sawtooth', vol: 0.05, slide: -70 })
   },
   stitch() {
-    if (throttled('stitch', 0.35)) return
+    if (throttled('stitch', 0.6, 'ambient')) return
     tone(1900, 0.03, { type: 'square', vol: 0.018 })
     tone(1600, 0.03, { type: 'square', vol: 0.018, delay: 0.09 })
   },
   howl() {
-    if (throttled('howl', 2)) return
+    if (throttled('howl', 2, 'priority')) return
     sweep(
       [
         [0, 330],
@@ -310,40 +352,40 @@ export const sfx = {
     )
   },
   growl() {
-    if (throttled('growl', 0.2)) return
+    if (throttled('growl', 0.2, 'priority')) return
     noise(0.28, { vol: 0.2, freq: 170, q: 2.2 })
     tone(85, 0.28, { type: 'sawtooth', vol: 0.05 })
   },
   wolfKill() {
-    if (throttled('wolfKill', 0.12)) return
+    if (throttled('wolfKill', 0.12, 'priority')) return
     tone(560, 0.16, { type: 'triangle', vol: 0.13, slide: -340 })
     noise(0.12, { vol: 0.14, freq: 600 })
   },
   nightfall() {
-    if (throttled('nightfall', 1)) return
+    if (throttled('nightfall', 1, 'priority')) return
     chord([196, 233, 147], 0.18, 0.9, 'sine', 0.11)
   },
   dawn() {
-    if (throttled('dawn', 1)) return
+    if (throttled('dawn', 1, 'priority')) return
     chord([392, 494, 587, 784], 0.1, 0.5, 'sine', 0.12)
   },
   bell() {
-    if (throttled('bell', 1)) return
+    if (throttled('bell', 1, 'priority')) return
     tone(880, 0.7, { type: 'sine', vol: 0.1 })
     tone(1318, 0.5, { type: 'sine', vol: 0.04, delay: 0.02 })
     tone(880, 0.7, { type: 'sine', vol: 0.1, delay: 0.38 })
   },
   fanfare() {
-    if (throttled('fanfare', 1)) return
+    if (throttled('fanfare', 1, 'priority')) return
     chord([523, 659, 784, 1046, 1318], 0.09, 0.3, 'triangle', 0.13)
   },
   levelUp() {
-    if (throttled('levelUp', 0.6)) return
+    if (throttled('levelUp', 0.6, 'priority')) return
     chord([659, 784, 988, 1318], 0.08, 0.35, 'triangle', 0.14)
     chord([330, 392, 494, 659], 0.08, 0.35, 'sine', 0.08)
   },
   lock() {
-    if (throttled('lock', 0.4)) return
+    if (throttled('lock', 0.4, 'priority')) return
     tone(240, 0.08, { type: 'square', vol: 0.04 })
     tone(200, 0.1, { type: 'square', vol: 0.04, delay: 0.08 })
   },

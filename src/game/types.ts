@@ -376,8 +376,12 @@ export interface PlayerSim {
   flyLvl: number
   /** jetpack switched on (you can still walk with it off) */
   flying: boolean
-  /** ⚡ Monster Power level */
+  /** 🔫 Laser Blaster level */
   slayLvl: number
+  /** seconds until the laser can fire again */
+  laserT: number
+  /** beams on screen right now (from, to, seconds left) */
+  beams: { x0: number; z0: number; x1: number; z1: number; t: number }[]
   carryLvl: number
   powerLvl: number
   chopT: number
@@ -659,7 +663,6 @@ export interface MetaSim {
   spent: number
   perks: Partial<Record<PerkId, number>>
 }
-
 
 export interface StatsExtra {
   bossesKilled: number

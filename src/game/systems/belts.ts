@@ -23,6 +23,8 @@ import {
   BELT_RETIRES,
   CASH_BELT,
   CASH_BELT_IDS,
+  cashBeltSpeed,
+  cashChunkFrac,
   FREIGHT,
   EXPORT_BELT_IDS,
   ECONOMY,
@@ -151,7 +153,6 @@ function machineSource(m: MachineSim, kind: ResKind): Source {
   }
 }
 
-
 // ---------------- belts replace their haulers ----------------
 
 const RETIRED_NAME: Record<string, string> = {
@@ -278,7 +279,7 @@ function updateBelt(sim: Sim, id: BeltId, dt: number) {
       sink.put()
       b.blockedT = 0
       b.pulse = 0.18
-      sfx.deposit()
+      sfx.beltDrop()
       const end = b.path[b.path.length - 1]
       sim.fx.push({ t: 'itemfly', kind: b.kind, from: { x: end.x, y: 0.55, z: end.z }, to: sink.to })
     } else {
@@ -351,7 +352,8 @@ export function cashBeltOn(sim: Sim, id: CashBeltId) {
 function updateCashBelts(sim: Sim, dt: number) {
   const cash = sim.cash
   if (cash.level <= 0) return
-  const speed = beltSpeed(cash.level) * CASH_BELT.speedMult * beltPerkMult(sim)
+  // Greased Gears helps too, but never past the easy-to-watch cap
+  const speed = Math.min(CASH_BELT.maxSpeed, cashBeltSpeed(cash.level) * beltPerkMult(sim))
   const chest = sim.chest.pos
 
   for (const id of CASH_BELT_IDS) {
@@ -378,7 +380,7 @@ function updateCashBelts(sim: Sim, dt: number) {
     if (pile.value >= 1 && pile.claimedBy === null && last >= BELT.spacing) {
       const take = Math.min(
         Math.floor(pile.value),
-        Math.max(ECONOMY.billValue, Math.ceil(pile.value * CASH_BELT.chunkFrac)),
+        Math.max(ECONOMY.billValue, Math.ceil(pile.value * cashChunkFrac(cash.level))),
       )
       pile.value -= take
       b.items.push(0)
@@ -413,7 +415,7 @@ function updateCashBelts(sim: Sim, dt: number) {
       size: 0.9,
     })
     sim.fx.push({ t: 'burst', x: chest.x, y: 0.8, z: chest.z, color: '#7fdc8f', n: 5, spread: 0.5 })
-    sfx.coin()
+    sfx.softCoin()
     cash.fxAcc = 0
   }
 }
