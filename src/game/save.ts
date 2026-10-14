@@ -54,7 +54,14 @@ interface SaveV2 {
   proc: Partial<Record<ProcessorId, { level: number; inCount: number; outCount: number; unlocked: boolean }>>
   tower: { built: boolean; dmgLvl: number; spdLvl: number; rngLvl: number }
   workers: WorkerRole[]
-  player: { spdLvl: number; carryLvl: number; powerLvl?: number; carry?: ResKind[] }
+  player: {
+    spdLvl: number
+    carryLvl: number
+    powerLvl?: number
+    carry?: ResKind[]
+    noGrab?: boolean
+    flying?: boolean
+  }
   pads: Record<string, { level: number; paid: number }>
   piles: Partial<Record<PileId, number>>
   rep: { xp: number; level: number }
@@ -134,6 +141,8 @@ export function saveNow(sim: Sim) {
         carryLvl: sim.player.carryLvl,
         powerLvl: sim.player.powerLvl,
         carry: [...sim.player.carry],
+        noGrab: sim.player.noGrab,
+        flying: sim.player.flying,
       },
       pads: Object.fromEntries(sim.pads.map((p) => [p.id, { level: p.level, paid: p.paid }])),
       // cash riding a belt goes back on its pile so none is lost
@@ -269,6 +278,11 @@ function apply(sim: Sim, d: SaveV2) {
   sim.player.carry = Array.isArray(d.player.carry)
     ? d.player.carry.filter((k) => Object.prototype.hasOwnProperty.call(RES_NAME, k)).slice(0, sim.player.carryCap)
     : []
+  sim.player.noGrab = !!d.player.noGrab
+  // superpowers come back from their pads
+  sim.player.flyLvl = d.pads.p_fly?.level ?? 0
+  sim.player.slayLvl = d.pads.p_slayer?.level ?? 0
+  sim.player.flying = d.player.flying ?? true
 
   for (const pad of sim.pads) {
     const pv = d.pads[pad.id]
@@ -323,10 +337,14 @@ function apply(sim: Sim, d: SaveV2) {
   // the first tick compares against this and pays out the time away
   sim.lastWall = d.savedAt ?? 0
   const offline = d.offline
-  sim.offline = offline && Number.isFinite(offline.amount) && offline.amount > 0 &&
-    Number.isFinite(offline.seconds) && offline.seconds >= 0
-    ? { amount: Math.floor(offline.amount), seconds: offline.seconds }
-    : null
+  sim.offline =
+    offline &&
+    Number.isFinite(offline.amount) &&
+    offline.amount > 0 &&
+    Number.isFinite(offline.seconds) &&
+    offline.seconds >= 0
+      ? { amount: Math.floor(offline.amount), seconds: offline.seconds }
+      : null
 
   // Industrial Park: stages, belts and terminal upgrades come back from their pads
   if (sim.zones.industry) openParkStage(sim, 'industry', true)

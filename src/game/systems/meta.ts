@@ -3,7 +3,7 @@
 // with the game closed or in the background.
 
 import type { Sim, PerkId } from '../types'
-import { OFFLINE, PRESTIGE, PERKS, starsFor, offlineFrac } from '../balance'
+import { OFFLINE, PRESTIGE, PERKS, BELT_IDS, MACHINE_IDS, starsFor, offlineFrac, perkLevelCost } from '../balance'
 import { perk } from '../perks'
 import { grantPad } from './economy'
 import { fmt } from '../format'
@@ -87,8 +87,22 @@ function applyStartPerks(next: Sim) {
     grantPad(next, 'cook')
     grantPad(next, 'runner')
   }
+  // 🗺️ Pioneers / 🏭 Industrial Charter: districts (and the park) come pre-built
+  const districts = Math.max(perk(next, 'pioneer'), perk(next, 'charter') > 0 ? 3 : 0)
+  const zones = ['zone_tannery', 'zone_fishery', 'zone_mine']
+  for (let i = 0; i < Math.min(3, districts); i++) grantPad(next, zones[i])
+  // 📐 Blueprints: every belt (and the cash belt), then every machine, at Lv1
+  const bp = perk(next, 'blueprints')
+  if (bp > 0) {
+    for (const id of BELT_IDS) grantPad(next, `belt_${id}`)
+    grantPad(next, 'belt_cash')
+  }
+  if (bp > 1) for (const id of MACHINE_IDS) grantPad(next, `m_${id}`)
+  const park = ['zone_industry', 'zone_port', 'zone_airport']
+  for (let i = 0; i < Math.min(3, perk(next, 'charter')); i++) grantPad(next, park[i])
   next.fx.length = 0
   next.banners.length = 0
+  next.notices.length = 0
   next.focus = null
 }
 
@@ -98,9 +112,7 @@ export function freeStars(sim: Sim) {
 }
 
 export function perkCost(sim: Sim, id: PerkId): number | null {
-  const lvl = perk(sim, id)
-  const def = PERKS[id]
-  return lvl < def.costs.length ? def.costs[lvl] : null
+  return perkLevelCost(id, perk(sim, id))
 }
 
 export function canBuyPerk(sim: Sim, id: PerkId) {
@@ -149,7 +161,8 @@ export function updateMeta(sim: Sim, dt: number) {
 function grantOffline(sim: Sim, seconds: number) {
   const night = perk(sim, 'offline')
   const capped = Math.min(seconds, (OFFLINE.maxHours + 4 * night) * 3600)
-  const amount = Math.floor(sim.incomeRate * capped * (offlineFrac(sim.meta.stars) + 0.1 * night))
+  // endless Night Shift: never more than 90% of the live income rate
+  const amount = Math.floor(sim.incomeRate * capped * Math.min(0.9, offlineFrac(sim.meta.stars) + 0.1 * night))
   if (amount < 1) return false
   // stack with an unclaimed payout rather than replacing it
   const prev = sim.offline

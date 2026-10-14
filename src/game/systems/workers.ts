@@ -21,13 +21,12 @@ import {
   WORKERS,
   WORLD,
   GUARD,
-  TREES,
-  NODES,
   PROC_IDS,
   workerSpeed,
   workerCap,
   guardDamage,
   starWorkerMult,
+  nodeRegrow,
 } from '../balance'
 import { RES_NAME } from '../icons'
 import { fmt } from '../format'
@@ -419,7 +418,7 @@ function updateGatherer(sim: Sim, w: WorkerSim, dt: number, cfg: GatherCfg) {
         else if (cfg.kind === 'coal') sfx.thud()
         else sfx.pick()
         if (node.wood <= 0) {
-          node.regrowT = regrowTime(cfg.kind)
+          node.regrowT = regrowTime(sim, cfg.kind)
           node.reservedBy = null
         }
       }
@@ -435,8 +434,8 @@ function updateGatherer(sim: Sim, w: WorkerSim, dt: number, cfg: GatherCfg) {
   walk(sim, w, cfg.idle, dt, 1)
 }
 
-function regrowTime(kind: ResKind) {
-  return kind === 'fish' ? NODES.hole.regrowTime : kind === 'coal' ? NODES.seam.regrowTime : TREES.regrowTime
+function regrowTime(sim: Sim, kind: ResKind) {
+  return nodeRegrow(kind === 'fish' ? 'hole' : kind === 'coal' ? 'seam' : 'tree', sim.rep.level)
 }
 
 const lumberjack = (sim: Sim, w: WorkerSim, dt: number) =>

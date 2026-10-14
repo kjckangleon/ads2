@@ -31,11 +31,11 @@ import {
   MACHINE,
   MACHINE_IDS,
   MACHINE_CFG,
-  NODES,
   beltSpeed,
   machineWorkTime,
   furnacePay,
   starSalesMult,
+  nodeRegrow,
 } from '../balance'
 import { dist, lerpAngle, damp } from '../util'
 import { beltPerkMult } from '../perks'
@@ -105,7 +105,10 @@ type ExportShares = Partial<Record<BeltId, { ex: number; all: number; seen: numb
 const settlementShares = new WeakMap<Sim, ExportShares>()
 function sharesFor(sim: Sim): ExportShares {
   let shares = settlementShares.get(sim)
-  if (!shares) { shares = {}; settlementShares.set(sim, shares) }
+  if (!shares) {
+    shares = {}
+    settlementShares.set(sim, shares)
+  }
   return shares
 }
 
@@ -147,6 +150,7 @@ function machineSource(m: MachineSim, kind: ResKind): Source {
     take: () => (m.buf[kind] = (m.buf[kind] ?? 0) - 1),
   }
 }
+
 
 // ---------------- belts replace their haulers ----------------
 
@@ -347,7 +351,7 @@ export function cashBeltOn(sim: Sim, id: CashBeltId) {
 function updateCashBelts(sim: Sim, dt: number) {
   const cash = sim.cash
   if (cash.level <= 0) return
-  const speed = beltSpeed(cash.level) * 1.2 * beltPerkMult(sim)
+  const speed = beltSpeed(cash.level) * CASH_BELT.speedMult * beltPerkMult(sim)
   const chest = sim.chest.pos
 
   for (const id of CASH_BELT_IDS) {
@@ -455,7 +459,7 @@ function updateGatherMachine(sim: Sim, m: MachineSim, dt: number) {
   node.wood--
   node.shake = 1
   m.buf[kind] = (m.buf[kind] ?? 0) + 1
-  if (node.wood <= 0) node.regrowT = NODES[cfg.nodes!].regrowTime
+  if (node.wood <= 0) node.regrowT = nodeRegrow(cfg.nodes!, sim.rep.level)
   sim.fx.push({
     t: 'itemfly',
     kind,

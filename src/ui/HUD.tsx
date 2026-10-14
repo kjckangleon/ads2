@@ -6,6 +6,7 @@ import { sim } from '../game/state'
 import { claimOffline, buyPerk, canBuyPerk, perkCost, freeStars } from '../game/systems/meta'
 import { PERKS, PERK_IDS } from '../game/balance'
 import { perk } from '../game/perks'
+import { requestSave } from '../game/saveFlag'
 
 /** Rolls toward the real balance each animation frame and bumps on gains. */
 function Money() {
@@ -305,10 +306,7 @@ function Shop() {
                 <span className="hud-perk-icon">{def.icon}</span>
                 <div className="hud-perk-info">
                   <div className="hud-perk-name">
-                    {def.name}{' '}
-                    <small>
-                      {lvl}/{def.costs.length}
-                    </small>
+                    {def.name} <small>{def.endless ? `Lv${lvl}` : `${lvl}/${def.costs.length}`}</small>
                   </div>
                   <div className="hud-perk-desc">{locked ? `Needs ${PERKS[def.requires!].name}` : def.desc}</div>
                 </div>
@@ -361,6 +359,9 @@ export function HUD() {
   const xpFrac = useUI((s) => s.xpFrac)
   const dark = useUI((s) => s.dark)
   const muted = useUI((s) => s.muted)
+  const noGrab = useUI((s) => s.noGrab)
+  const hasJet = useUI((s) => s.hasJet)
+  const flying = useUI((s) => s.flying)
   const set = useUI((s) => s.set)
   const debugOpen = useUI((s) => s.debugOpen)
   const panel = useUI((s) => s.panel)
@@ -397,6 +398,41 @@ export function HUD() {
           <PanelButton id="alerts" icon="🔔" badge={panel === 'alerts' ? 0 : unread} />
           <PanelButton id="tasks" icon="🎯" badge={tasksReady} />
           {stars > 0 && <PanelButton id="shop" icon="❄️" badge={free} />}
+          {hasJet && (
+            <button
+              className={`hud-btn${flying ? ' active' : ''}`}
+              title={flying ? 'Jetpack on: tap to walk' : 'Walking: tap to fly'}
+              onClick={() => {
+                const p = sim.player
+                p.flying = !p.flying
+                set({ flying: p.flying })
+                requestSave()
+              }}
+            >
+              {flying ? '🚀' : '🏃'}
+            </button>
+          )}
+          <button
+            className={`hud-btn${noGrab ? ' active' : ''}`}
+            title={noGrab ? 'Hands off: not picking anything up' : 'Picking things up'}
+            onClick={() => {
+              const p = sim.player
+              p.noGrab = !p.noGrab
+              set({ noGrab: p.noGrab })
+              sim.fx.push({
+                t: 'text',
+                x: p.pos.x,
+                y: 2.6,
+                z: p.pos.z,
+                str: p.noGrab ? '🙅 Hands off: no grabbing' : '✋ Grabbing again',
+                color: '#bfe6ff',
+                size: 0.9,
+              })
+              requestSave()
+            }}
+          >
+            {noGrab ? '🙅' : '✋'}
+          </button>
           <button
             className="hud-btn"
             onClick={() => {

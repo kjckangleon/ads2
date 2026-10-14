@@ -209,6 +209,49 @@ products that vehicles come to buy. The frozen camp becomes its supply chain.
   level-up messages cover the park too. Moving the Settlement resets it with
   everything else.
 
+## Your own powers (late game)
+
+- **🚀 Jetpack** (Level 6+, needs Boots maxed, endless levels). You hover and
+  fly 1.6× faster, +0.1× per level up to 2.3× walking speed at Lv8 (the max), straight over
+  buildings, trees and the caravan; locked district walls still stop you.
+  You lean into the flight like a superhero. The 🚀 / 🏃 button switches
+  between flying and walking.
+- **⚡ Monster Power** (Level 7+, needs the Sharp Axe maxed, endless levels).
+  Each level adds one full Sharp Axe hit of damage against wolves, bears,
+  goats and bosses. Every hit also sends a shockwave through all monsters
+  around you, you reach them from further away, and bears and bosses knock
+  you back less (not at all from Level 4).
+
+## Frost Stars late game
+
+Most perks now keep levelling with rising costs (Old Friends, Royal Favor,
+Generous Folk, Greased Gears, Night Shift, Trophy Hunter), and three perks
+keep your progress when you move:
+
+- **🗺️ Pioneers**: new camps open with the Tannery, then the Fishery, then the
+  Coal Mine already built.
+- **📐 Blueprints**: every conveyor and cash belt built, then every machine.
+- **🏭 Industrial Charter**: the Industrial Park, then the Port, then the
+  Airport.
+
+## Tuning notes
+
+- **Hands off (✋ / 🙅 button).** Stops you chopping, fishing, mining and
+  picking anything up, so walking around while buying never grabs logs.
+  Dropping off, buying and collecting cash still work. Saved with the game.
+- **Supply keeps up.** Trees hold 20 logs and regrow in 4 s, fishing holes
+  hold 16 fish (3 s), coal seams 20 lumps (6 s), all regrowing faster as the
+  settlement grows; animals respawn twice as fast.
+- **Upgrades always speed things up.** Every stall level (star levels too)
+  hands items over faster, down to 0.025 s per item. Factory upgrades work
+  faster and each level turns one input into 10% more products.
+- **Belt cap.** Item and cash belts upgrade up to Lv10 (about 12 m/s). Past
+  that a belt would outrun what feeds it. Cash belts run twice as fast as item
+  belts and carry bigger bundles, so cash doesn't pile up.
+- **Sound on phones.** Every tap restarts audio if the phone paused it
+  (backgrounding, the lock screen or a call). On iPhone, the silent switch
+  also mutes the game.
+
 Ground chevrons around the player point at the current objective (gold), a
 raiding wolf (red), a waiting caravan (teal) and where your load goes (blue).
 

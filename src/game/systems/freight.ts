@@ -173,7 +173,11 @@ function freeTruckSlot(sim: Sim): number {
 
 function truckWant(sim: Sim) {
   const lvl = Math.max(0, sim.rep.level - 12)
-  return freightOrderCapacity(Math.round(T.baseWant + T.wantPerLevel * lvl + Math.random() * 4), T.maxWant, sim.terminals.dock.level)
+  return freightOrderCapacity(
+    Math.round(T.baseWant + T.wantPerLevel * lvl + Math.random() * 4),
+    T.maxWant,
+    sim.terminals.dock.level,
+  )
 }
 
 function spawnTruck(sim: Sim) {
@@ -224,13 +228,21 @@ function updateTruck(sim: Sim, v: VehicleSim, dt: number) {
 
 function shipOrder(sim: Sim): FreightLine[] {
   const lvl = Math.max(0, sim.rep.level - 14)
-  const need = freightOrderCapacity(SHIP.base + SHIP.perShip * sim.freight.ships + SHIP.perLevel * lvl, SHIP.max, sim.terminals.port.level)
+  const need = freightOrderCapacity(
+    SHIP.base + SHIP.perShip * sim.freight.ships + SHIP.perLevel * lvl,
+    SHIP.max,
+    sim.terminals.port.level,
+  )
   return [{ kind: 'steel', need, got: 0 }]
 }
 
 function planeOrder(sim: Sim): FreightLine[] {
   const lvl = Math.max(0, sim.rep.level - 16)
-  const need = freightOrderCapacity(PLANE.base + PLANE.perPlane * sim.freight.planes + PLANE.perLevel * lvl, PLANE.max, sim.terminals.air.level)
+  const need = freightOrderCapacity(
+    PLANE.base + PLANE.perPlane * sim.freight.planes + PLANE.perLevel * lvl,
+    PLANE.max,
+    sim.terminals.air.level,
+  )
   return [
     { kind: 'jacket', need, got: 0 },
     { kind: 'canned', need: Math.round(need * 1.5), got: 0 },
@@ -243,7 +255,7 @@ function updateBig(sim: Sim, v: VehicleSim, t: TerminalSim, dt: number, cfg: typ
     if (drive(v, dt)) {
       v.state = 'load'
       // Endless capacity upgrades must leave enough time to physically load the order.
-      const loadSeconds = v.order.reduce((sum, line) => sum + line.need - line.got, 0) * t.loadTime / 2
+      const loadSeconds = (v.order.reduce((sum, line) => sum + line.need - line.got, 0) * t.loadTime) / 2
       v.timer = v.maxTimer = Math.max(cfg.timer, Math.ceil(loadSeconds * 1.25))
       sfx.fanfare()
     }
@@ -323,7 +335,8 @@ export function bigOrderView(sim: Sim, kind: 'ship' | 'plane') {
   const terminal = kind === 'ship' ? sim.terminals.port : sim.terminals.air
   if (!terminal.open) return { text: '', frac: 0, time: 0 }
   const v = sim.freight.vehicles.find((x) => x.kind === kind && x.state !== 'leave')
-  if (!v) return { text: 'Next dispatch', frac: 0, time: Math.ceil(kind === 'ship' ? sim.freight.shipT : sim.freight.planeT) }
+  if (!v)
+    return { text: 'Next dispatch', frac: 0, time: Math.ceil(kind === 'ship' ? sim.freight.shipT : sim.freight.planeT) }
   if (v.state === 'arrive') {
     let seconds = 0
     let from = { ...v.pos, y: v.y }

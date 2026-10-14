@@ -97,6 +97,11 @@ export interface UIState {
   tasks: TaskView[]
   tasksKey: string
   muted: boolean
+  /** hands-off mode (no picking anything up) */
+  noGrab: boolean
+  /** 🚀 Jetpack owned / switched on */
+  hasJet: boolean
+  flying: boolean
   quality: Quality
   debugOpen: boolean
   set: (p: Partial<UIState>) => void
@@ -158,6 +163,9 @@ export const useUI = create<UIState>((set) => ({
   tasks: [],
   tasksKey: '',
   muted: false,
+  noGrab: false,
+  hasJet: false,
+  flying: true,
   quality: autoQuality(),
   debugOpen: false,
   set: (p) => set(p),

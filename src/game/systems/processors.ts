@@ -3,7 +3,7 @@
 // run on their own.
 
 import type { Sim } from '../types'
-import { PROC_IDS, PLAYER, FACTORY_IDS, MACHINE_IDS, MACHINE_CFG, machineSpeedMult } from '../balance'
+import { PROC_IDS, PLAYER, FACTORY_IDS, MACHINE_IDS, MACHINE_CFG, machineSpeedMult, procYield } from '../balance'
 import { dist } from '../util'
 import { sfx } from '../audio'
 import { machineStaffs } from './belts'
@@ -22,14 +22,22 @@ export function updateProcessors(sim: Sim, dt: number) {
     if (staffed && pr.inCount > 0 && pr.outCount < pr.outCap) {
       pr.active = true
       const machine = MACHINE_IDS.find((mid) => MACHINE_CFG[mid].proc === id && sim.machines[mid].level > 0)
-      const workTime = Math.max(0.04, pr.time / (machine ? machineSpeedMult(sim.machines[machine].level) : 1))
+      const workTime = Math.max(0.02, pr.time / (machine ? machineSpeedMult(sim.machines[machine].level) : 1))
+      // upgraded factories turn each input into more than one product (the fraction carries over)
+      const yieldPer = procYield(id, pr.level)
+      // fast lines don't spawn a flying item for every single product
+      const fxChance = Math.min(1, 0.12 / workTime)
       pr.t += dt
       if (id === 'tailor') sfx.stitch()
       else if (!factory) sfx.sizzle()
       while (pr.t >= workTime && pr.inCount > 0 && pr.outCount < pr.outCap) {
         pr.t -= workTime
         pr.inCount--
-        pr.outCount++
+        pr.yieldAcc = (pr.yieldAcc ?? 0) + yieldPer
+        const made = Math.min(Math.floor(pr.yieldAcc), pr.outCap - pr.outCount)
+        pr.yieldAcc -= Math.floor(pr.yieldAcc)
+        pr.outCount += Math.max(1, made)
+        if (Math.random() > fxChance) continue
         sim.fx.push({
           t: 'itemfly',
           kind: pr.outKind,

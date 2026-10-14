@@ -150,6 +150,8 @@ export interface ProcessorSim {
   staffed: boolean
   /** items taken off the output table by haulers and belts (drives export belt shares) */
   taken?: number
+  /** factories: fractional extra products carried between items */
+  yieldAcc?: number
 }
 
 export interface TreeSim {
@@ -173,7 +175,20 @@ export type EventId = 'blizzard' | 'festival' | 'goldRush' | 'siege' | 'boss'
 
 /** Frost Star shop perks (bought with unspent stars, kept forever) */
 export type PerkId =
-  'headstart' | 'crew' | 'startLevel' | 'vip' | 'tips' | 'belts' | 'arrows' | 'offline' | 'events' | 'bossLoot'
+  | 'headstart'
+  | 'crew'
+  | 'startLevel'
+  | 'vip'
+  | 'tips'
+  | 'belts'
+  | 'arrows'
+  | 'offline'
+  | 'events'
+  | 'bossLoot'
+  // late perks that keep progress through a move
+  | 'pioneer'
+  | 'blueprints'
+  | 'charter'
 
 export interface AnimalSim {
   id: number
@@ -352,9 +367,17 @@ export interface PlayerSim {
   pos: V2
   yaw: number
   carry: ResKind[]
+  /** hands-off mode: no chopping, fishing, mining or picking anything up (dropping off and buying still work) */
+  noGrab: boolean
   carryCap: number
   speed: number
   spdLvl: number
+  /** 🚀 Jetpack level (0 = not bought) */
+  flyLvl: number
+  /** jetpack switched on (you can still walk with it off) */
+  flying: boolean
+  /** ⚡ Monster Power level */
+  slayLvl: number
   carryLvl: number
   powerLvl: number
   chopT: number
@@ -636,6 +659,7 @@ export interface MetaSim {
   spent: number
   perks: Partial<Record<PerkId, number>>
 }
+
 
 export interface StatsExtra {
   bossesKilled: number

@@ -15,11 +15,13 @@ import {
   TERMINAL_IDS,
   playerChopTime,
   playerDamage,
+  flyMult,
+  nodeRegrow,
 } from '../balance'
 import { input, pollInput } from '../input'
 import { clamp, dist, lerpAngle, damp } from '../util'
 import { sfx, haptic } from '../audio'
-import { hurtAnimal } from './animals'
+import { hurtAnimal, isBoss } from './animals'
 import { damageWolf } from './wolves'
 import { caravanDeliver, caravanNeeds, caravanX } from './caravan'
 import { automated } from './belts'
@@ -139,22 +141,34 @@ function move(sim: Sim, dt: number) {
   const mx = input.x
   const mz = input.z
   p.moving = Math.abs(mx) > 0.01 || Math.abs(mz) > 0.01
+  // 🚀 the Jetpack: faster, and you fly straight over buildings, trees and the caravan
+  const flying = p.flyLvl > 0 && p.flying
+  const speed = p.speed * flyMult(p.flyLvl)
   if (p.moving) {
-    p.pos.x += mx * p.speed * dt
-    p.pos.z += mz * p.speed * dt
+    p.pos.x += mx * speed * dt
+    p.pos.z += mz * speed * dt
     p.yaw = lerpAngle(p.yaw, Math.atan2(mx, mz), damp(14, dt))
     p.walkPhase += dt * p.speed * 2.3
     p.dustT -= dt
     if (p.dustT <= 0) {
-      p.dustT = PLAYER.dustInterval
-      sim.fx.push({ t: 'burst', x: p.pos.x, y: 0.12, z: p.pos.z, color: '#f4f8ff', n: 2, spread: 0.18, up: 0.9 })
+      if (flying) {
+        // a jet trail streaming out behind you, so the speed reads on screen
+        p.dustT = PLAYER.dustInterval * 0.5
+        const bx = p.pos.x - mx * 0.9
+        const bz = p.pos.z - mz * 0.9
+        sim.fx.push({ t: 'burst', x: bx, y: PLAYER.flyHover + 0.5, z: bz, color: '#ffc37a', n: 2, spread: 0.12, up: 0.2 })
+        sim.fx.push({ t: 'burst', x: bx, y: PLAYER.flyHover + 0.4, z: bz, color: '#eef3fa', n: 2, spread: 0.25, up: 0.4 })
+      } else {
+        p.dustT = PLAYER.dustInterval
+        sim.fx.push({ t: 'burst', x: p.pos.x, y: 0.12, z: p.pos.z, color: '#f4f8ff', n: 2, spread: 0.18, up: 0.9 })
+      }
     }
   }
   const b = WORLD.bounds
   p.pos.x = clamp(p.pos.x, b.minX, b.maxX)
   p.pos.z = clamp(p.pos.z, b.minZ, b.maxZ)
 
-  for (const col of staticColliders(sim)) {
+  for (const col of flying ? [] : staticColliders(sim)) {
     const dx = p.pos.x - col.x
     const dz = p.pos.z - col.z
     const d = Math.hypot(dx, dz)
@@ -164,7 +178,7 @@ function move(sim: Sim, dt: number) {
       p.pos.z = col.z + (dz / d) * min
     }
   }
-  for (const box of staticBoxes(sim)) pushOutOfBox(p.pos, box, 0.35)
+  if (!flying) for (const box of staticBoxes(sim)) pushOutOfBox(p.pos, box, 0.35)
 
   // locked districts: push back out across the nearest barrier edge
   // (edges outside the world bounds are far away, so they never win)
@@ -196,9 +210,9 @@ const GATHER_FX = {
 function gather(sim: Sim, dt: number) {
   const p = sim.player
   let node: TreeSim | null = null
-  let type: keyof typeof NODES = 'tree'
+  let type: 'tree' | 'hole' | 'seam' = 'tree'
   let best = TREES.chopRange
-  const consider = (list: TreeSim[], t: keyof typeof NODES) => {
+  const consider = (list: TreeSim[], t: 'tree' | 'hole' | 'seam') => {
     for (const n of list) {
       if (n.wood <= 0) continue
       const d = dist(p.pos, n.pos)
@@ -213,7 +227,7 @@ function gather(sim: Sim, dt: number) {
   if (sim.zones.fishery) consider(sim.holes, 'hole')
   if (sim.zones.mine) consider(sim.seams, 'seam')
   const n = node as TreeSim | null
-  if (!n) {
+  if (!n || p.noGrab) {
     p.chopT = 0
     return
   }
@@ -239,14 +253,20 @@ function gather(sim: Sim, dt: number) {
     to: { x: p.pos.x, y: 1.8 + p.carry.length * 0.24, z: p.pos.z },
   })
   sim.fx.push({ t: 'burst', x: n.pos.x, y: fx.y, z: n.pos.z, color: fx.burst, n: 7, spread: 0.7 })
-  if (n.wood <= 0) n.regrowT = cfg.regrowTime
+  if (n.wood <= 0) n.regrowT = nodeRegrow(type, sim.rep.level)
 }
+
+/** wolves, bears, goats and bosses: what ⚡ Monster Power is for */
+const isMonster = (a: AnimalSim) => a.kind === 'bear' || a.kind === 'goat' || isBoss(a.kind)
 
 function fight(sim: Sim, dt: number) {
   const p = sim.player
+  const slay = p.slayLvl
+  // ⚡ reach further toward monsters
+  const reach = slay > 0 ? Math.min(PLAYER.slayReachMax, PLAYER.slayReachPerLvl * slay + 0.5) : 0
   // wolves take priority over game
   let wolf: WolfSim | null = null
-  let bw = PLAYER.interactRange + 0.4
+  let bw = PLAYER.interactRange + 0.4 + reach
   for (const w of sim.wolves) {
     const d = dist(p.pos, w.pos)
     if (d < bw) {
@@ -258,7 +278,7 @@ function fight(sim: Sim, dt: number) {
   if (!wolf) {
     let ba = PLAYER.interactRange
     for (const a of sim.animals) {
-      const d = dist(p.pos, a.pos)
+      const d = dist(p.pos, a.pos) - (isMonster(a) ? reach : 0)
       if (d < ba) {
         ba = d
         prey = a
@@ -276,17 +296,35 @@ function fight(sim: Sim, dt: number) {
   p.attackT = 0
   p.swing = 0.25
   const dmg = playerDamage(p.powerLvl)
+  const monsterDmg = dmg * (1 + PLAYER.slayDmgPerLvl * slay)
   sfx.thud()
-  if (wolf) {
-    damageWolf(sim, wolf, dmg)
-    return
-  }
-  if (prey) hurtAnimal(sim, prey, dmg, false)
+  if (wolf) damageWolf(sim, wolf, monsterDmg)
+  else if (prey) hurtAnimal(sim, prey, isMonster(prey) ? monsterDmg : dmg, false)
+  if (slay > 0 && (wolf || (prey && isMonster(prey)))) shockwave(sim, target, monsterDmg * PLAYER.slayWaveFrac)
+}
+
+/** ⚡ Monster Power: every hit on a monster ripples out and hits every other monster nearby */
+function shockwave(sim: Sim, hit: WolfSim | AnimalSim, dmg: number) {
+  const p = sim.player
+  const r = PLAYER.slayRadius + PLAYER.slayRadiusPerLvl * p.slayLvl
+  for (const w of [...sim.wolves]) if (w !== hit && dist(w.pos, p.pos) < r) damageWolf(sim, w, dmg)
+  for (const a of [...sim.animals])
+    if (a !== hit && isMonster(a) && a.hp > 0 && dist(a.pos, p.pos) < r) hurtAnimal(sim, a, dmg, false)
+  sim.fx.push({
+    t: 'burst',
+    x: p.pos.x,
+    y: 0.5,
+    z: p.pos.z,
+    color: '#9fe8ff',
+    n: 10 + 2 * Math.min(10, p.slayLvl),
+    spread: r * 0.6,
+    up: 1.2,
+  })
 }
 
 function pickUpDrops(sim: Sim) {
   const p = sim.player
-  if (p.transferCd > 0 || !hasRoom(sim)) return
+  if (p.noGrab || p.transferCd > 0 || !hasRoom(sim)) return
   let near: DropSim | null = null
   let best = PLAYER.pickupRange
   for (const d of sim.drops) {
@@ -356,7 +394,13 @@ function depositAndTake(sim: Sim) {
         to: { x: pr.inZone.x, y: 0.8, z: pr.inZone.z },
       })
     }
-    if (pr.outCount > 0 && p.transferCd <= 0 && hasRoom(sim) && dist(p.pos, pr.outZone) < PLAYER.depositRange * 0.8) {
+    if (
+      !p.noGrab &&
+      pr.outCount > 0 &&
+      p.transferCd <= 0 &&
+      hasRoom(sim) &&
+      dist(p.pos, pr.outZone) < PLAYER.depositRange * 0.8
+    ) {
       pr.outCount--
       p.carry.push(pr.outKind)
       p.transferCd = PLAYER.transferInterval
@@ -392,7 +436,7 @@ function useDepot(sim: Sim, d: DepotSim, automated: boolean) {
     })
     return
   }
-  if (d.count <= 0 || !hasRoom(sim)) return
+  if (p.noGrab || d.count <= 0 || !hasRoom(sim)) return
   d.count--
   p.carry.push(d.kind)
   p.transferCd = PLAYER.transferInterval

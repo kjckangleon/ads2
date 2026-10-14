@@ -1,4 +1,4 @@
-import { unlockAudio } from './audio'
+import { unlockAudio, resumeAudio } from './audio'
 
 // Shared input vector, written by keyboard listeners and the virtual
 // joystick, read once per tick by the player system. Not React state.
@@ -48,7 +48,16 @@ export function initInput() {
     held.clear()
     recompute()
   })
-  window.addEventListener('pointerdown', () => unlockAudio(), { once: true })
+  // every gesture can (re)start audio: phones suspend it in the background or on a call.
+  // Capture phase, so the joystick and buttons can't swallow the event first.
+  const wake = () => unlockAudio()
+  for (const ev of ['pointerdown', 'touchstart', 'touchend', 'click']) {
+    window.addEventListener(ev, wake, { capture: true, passive: true })
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') resumeAudio()
+  })
+  window.addEventListener('pageshow', () => resumeAudio())
 }
 
 export function pollInput() {

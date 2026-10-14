@@ -111,7 +111,8 @@ function trySpawnCustomer(sim: Sim) {
   if (!id) return
   const st = sim.stations[id]
   const slot = backSlot(st)
-  const vipChance = CUSTOMERS.vipChance * (1 + 0.5 * perk(sim, 'vip'))
+  // endless Royal Favor tops out at half the crowd being VIPs
+  const vipChance = Math.min(0.5, CUSTOMERS.vipChance * (1 + 0.5 * perk(sim, 'vip')))
   const vip = festivalOn(sim) || (sim.rep.level >= CUSTOMERS.vipMinLevel && Math.random() < vipChance)
   // higher levels: each survivor buys a bundle (VIPs always the biggest one)
   const most = maxDemand(sim.rep.level)
@@ -154,12 +155,15 @@ function handOver(sim: Sim, c: CustomerSim, st: StationSim) {
   st.stock--
   c.got++
   c.carrying = st.accepts
-  sim.fx.push({
-    t: 'itemfly',
-    kind: st.accepts,
-    from: { x: st.pos.x, y: 1.1, z: st.pos.z },
-    to: { x: c.pos.x, y: 1.8 + c.got * 0.15, z: c.pos.z },
-  })
+  // a fast stall shows every few items flying over, not all of them
+  if (st.serviceTime > 0.08 || c.got % 3 === 1) {
+    sim.fx.push({
+      t: 'itemfly',
+      kind: st.accepts,
+      from: { x: st.pos.x, y: 1.1, z: st.pos.z },
+      to: { x: c.pos.x, y: 1.8 + c.got * 0.15, z: c.pos.z },
+    })
+  }
   if (c.got < c.want) {
     sfx.unstack(c.got)
     return
@@ -284,11 +288,13 @@ export function updateCustomers(sim: Sim, dt: number) {
       if (st.stock === 0) c.starveT += dt
 
       if (c.slot === 0 && arrived && st.stock > 0) {
+        // an upgraded stall can hand over several items in one frame
         c.serveT += dt
-        if (c.serveT >= st.serviceTime) {
-          c.serveT = 0
+        while (c.serveT >= st.serviceTime && st.stock > 0 && c.state === 'queue') {
+          c.serveT -= st.serviceTime
           handOver(sim, c, st)
         }
+        if (c.state !== 'queue') c.serveT = 0
       }
       continue
     }

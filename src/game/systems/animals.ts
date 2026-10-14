@@ -1,5 +1,5 @@
 import type { Sim, AnimalSim, AnimalKind, BossKind, V2, TreeSim } from '../types'
-import { ANIMALS, BOSS, WORLD, deerTarget, bigGameTarget, animalRespawn } from '../balance'
+import { ANIMALS, BOSS, WORLD, PLAYER, deerTarget, bigGameTarget, animalRespawn } from '../balance'
 import { bossDown } from './events'
 import { seek, dist, clamp } from '../util'
 import { spawnAnimal } from '../state'
@@ -148,7 +148,9 @@ function bearSwipe(sim: Sim, a: AnimalSim) {
   const dx = p.pos.x - a.pos.x
   const dz = p.pos.z - a.pos.z
   const d = Math.hypot(dx, dz) || 1
-  const k = isBoss(a.kind) ? BOSS[a.kind].knockback : ANIMALS.bearKnockback
+  // ⚡ Monster Power makes you harder to bat away
+  const tough = Math.max(0, 1 - PLAYER.slayKnockbackCut * p.slayLvl)
+  const k = (isBoss(a.kind) ? BOSS[a.kind].knockback : ANIMALS.bearKnockback) * tough
   p.pos.x += (dx / d) * k
   p.pos.z += (dz / d) * k
   sim.fx.push({ t: 'shake', power: 0.45 })

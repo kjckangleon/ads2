@@ -37,6 +37,7 @@ import {
   MACHINE_IDS,
   MACHINE_CFG,
   PARK,
+  PLAYER,
   TERMINAL_CFG,
   FREIGHT,
   terminalCap,
@@ -93,6 +94,10 @@ function padVisible(sim: Sim, pad: PadSim): boolean {
     case 'p_speed':
     case 'p_carry':
       return s.collected >= 150
+    case 'p_fly':
+      return sim.rep.level >= PLAYER.flyLevel
+    case 'p_slayer':
+      return sim.tower.built && sim.rep.level >= PLAYER.slayLevel
     case 'w_speed':
     case 'w_carry':
       return sim.workers.length >= 3
@@ -376,7 +381,8 @@ function upgradeTerminal(sim: Sim, id: TerminalId) {
   t.cap = terminalCap(t.level)
   t.loadTime = terminalLoadTime(t.level)
   sim.fx.push({ t: 'burst', x: t.pos.x, y: 1.6, z: t.pos.z, color: '#b0e0ff', n: 16, spread: 1.6 })
-  if (t.level === FREIGHT.maxLevel) banner(sim, '♾️ Unlimited storage!', `The ${TERMINAL_CFG[id].name} can keep upgrading`, 'good')
+  if (t.level === FREIGHT.maxLevel)
+    banner(sim, '♾️ Unlimited storage!', `The ${TERMINAL_CFG[id].name} can keep upgrading`, 'good')
   const capacity = Math.round((1 + FREIGHT.orderCapacityPerLevel * t.level) * 100)
   const icon = id === 'dock' ? '🚚' : id === 'port' ? '🚢' : '✈️'
   banner(sim, `${icon} Larger cargo orders!`, `Next dispatch: ${capacity}% of base capacity`, 'good')
@@ -577,6 +583,26 @@ export function applyPad(sim: Sim, pad: PadSim) {
       sim.player.powerLvl++
       sfx.buy()
       break
+    case 'p_fly': {
+      const p = sim.player
+      p.flyLvl++
+      sim.fx.push({ t: 'burst', x: p.pos.x, y: 0.4, z: p.pos.z, color: '#ffb35a', n: 26, spread: 1.4, up: 4 })
+      if (p.flyLvl === 1) {
+        p.flying = true
+        banner(sim, '🚀 You can fly!', 'Tap 🚀 to switch between flying and walking', 'good')
+      }
+      sfx.build()
+      break
+    }
+    case 'p_slayer': {
+      const p = sim.player
+      p.slayLvl++
+      sim.fx.push({ t: 'burst', x: p.pos.x, y: 1.2, z: p.pos.z, color: '#9fe8ff', n: 26, spread: 2, up: 3 })
+      if (p.slayLvl === 1)
+        banner(sim, '⚡ Monster Power!', 'Every hit sends a shockwave through wolves, bears and bosses', 'good')
+      sfx.build()
+      break
+    }
     case 'w_speed':
       sim.lodge.spdLvl++
       sfx.buy()

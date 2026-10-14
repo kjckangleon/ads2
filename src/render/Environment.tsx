@@ -64,19 +64,20 @@ const pathMat = new THREE.MeshBasicMaterial({
 function Paths() {
   const patches: { x: number; z: number; sx: number; sz: number; rot?: number }[] = [
     { x: 0, z: 18, sx: 2.6, sz: 13 }, // entry road
-    { x: WORLD.woodStation.x, z: 12.5, sx: 1.6, sz: 10.5 }, // wood queue
-    { x: WORLD.meatStation.x, z: 12.5, sx: 1.6, sz: 10.5 }, // meat queue
+    // queues and workshops follow wherever you've placed them (the layout editor)
+    { x: sim.stations.wood.pos.x, z: sim.stations.wood.pos.z + 10.5, sx: 1.6, sz: 10.5 }, // wood queue
+    { x: sim.stations.meat.pos.x, z: sim.stations.meat.pos.z + 10.5, sx: 1.6, sz: 10.5 }, // meat queue
     { x: WORLD.campfire.x, z: WORLD.campfire.z, sx: 4, sz: 3.4 },
-    { x: WORLD.kitchen.x, z: WORLD.kitchen.z + 1, sx: 3.4, sz: 2.6 },
+    { x: sim.proc.kitchen.pos.x, z: sim.proc.kitchen.pos.z + 1, sx: 3.4, sz: 2.6 },
     { x: WORLD.towerSpot.x, z: WORLD.towerSpot.z, sx: 3, sz: 2.6 },
     { x: WORLD.meadow.x, z: WORLD.meadow.z, sx: 8.4, sz: 7.4 },
     { x: WORLD.treeArea.x, z: WORLD.treeArea.z, sx: 6.4, sz: 6.4 },
     { x: -30, z: WORLD.caravanSpot.z + 0.8, sx: 17, sz: 2.2 }, // caravan road
-    { x: WORLD.tailor.x, z: WORLD.tailor.z + 1, sx: 3.4, sz: 2.6 },
-    { x: WORLD.coatStation.x, z: WORLD.coatStation.z + 9.5, sx: 1.6, sz: 9.6 }, // coat queue
-    { x: WORLD.fishStation.x, z: WORLD.fishStation.z + 6, sx: 1.6, sz: 6.2 }, // fish queue
-    { x: WORLD.smokehouse.x, z: WORLD.smokehouse.z + 1, sx: 3.4, sz: 2.6 },
-    { x: WORLD.furnace.x, z: WORLD.furnace.z + 1, sx: 3.2, sz: 3 },
+    { x: sim.proc.tailor.pos.x, z: sim.proc.tailor.pos.z + 1, sx: 3.4, sz: 2.6 },
+    { x: sim.stations.coat.pos.x, z: sim.stations.coat.pos.z + 9.5, sx: 1.6, sz: 9.6 }, // coat queue
+    { x: sim.stations.fish.pos.x, z: sim.stations.fish.pos.z + 6, sx: 1.6, sz: 6.2 }, // fish queue
+    { x: sim.proc.smokehouse.pos.x, z: sim.proc.smokehouse.pos.z + 1, sx: 3.4, sz: 2.6 },
+    { x: sim.furnace.pos.x, z: sim.furnace.pos.z + 1, sx: 3.2, sz: 3 },
     { x: WORLD.coalDepot.x, z: WORLD.coalDepot.z, sx: 2.6, sz: 2.2 },
   ]
   // one merged mesh for every trampled patch (a draw call each adds up on phones)

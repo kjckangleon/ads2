@@ -21,11 +21,33 @@ function ac(): AudioContext | null {
   return ctx
 }
 
-/** Must be called from a user gesture once (pointer/key handler). */
+/**
+ * Call from every user gesture (touch / click / key). Phones suspend Web Audio
+ * whenever the page is backgrounded, the screen locks or a call comes in
+ * (iOS reports 'interrupted'), and it only restarts from inside a gesture.
+ * Cheap when audio is already running.
+ */
 export function unlockAudio() {
   const c = ac()
-  if (c && c.state === 'suspended') c.resume()
+  if (!c) return
+  if (c.state !== 'running') {
+    c.resume().catch(() => {})
+    // iOS only truly unlocks once something plays inside the gesture: a one-sample silent buffer
+    try {
+      const src = c.createBufferSource()
+      src.buffer = c.createBuffer(1, 1, 22050)
+      src.connect(c.destination)
+      src.start(0)
+    } catch {
+      // ignore
+    }
+  }
   startWind()
+}
+
+/** Back from the background: try to restart right away (the next tap retries if the browser refuses). */
+export function resumeAudio() {
+  if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {})
 }
 
 let coinFlip = false
@@ -65,7 +87,8 @@ function tone(
   opts: { type?: OscillatorType; vol?: number; slide?: number; delay?: number } = {},
 ) {
   const c = ac()
-  if (!c || !master || muted) return
+  // paused (backgrounded / not unlocked yet): skip, or every queued sound would blast at once on resume
+  if (!c || !master || muted || c.state !== 'running') return
   const t0 = c.currentTime + (opts.delay ?? 0)
   const osc = c.createOscillator()
   const g = c.createGain()
@@ -82,7 +105,8 @@ function tone(
 let noiseBuf: AudioBuffer | null = null
 function noise(dur: number, opts: { vol?: number; freq?: number; q?: number; delay?: number } = {}) {
   const c = ac()
-  if (!c || !master || muted) return
+  // paused (backgrounded / not unlocked yet): skip, or every queued sound would blast at once on resume
+  if (!c || !master || muted || c.state !== 'running') return
   if (!noiseBuf) {
     noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate)
     const d = noiseBuf.getChannelData(0)
@@ -138,7 +162,8 @@ function sweep(
   opts: { type?: OscillatorType; vol?: number; delay?: number } = {},
 ) {
   const c = ac()
-  if (!c || !master || muted) return
+  // paused (backgrounded / not unlocked yet): skip, or every queued sound would blast at once on resume
+  if (!c || !master || muted || c.state !== 'running') return
   const t0 = c.currentTime + (opts.delay ?? 0)
   const osc = c.createOscillator()
   const g = c.createGain()

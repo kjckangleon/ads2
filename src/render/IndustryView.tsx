@@ -59,7 +59,7 @@ function buildGround(): THREE.Group {
   concrete.push(flat(PARK.vault.x - 2.6, PARK.vault.z - 2.4, PARK.vault.x + 2.6, PARK.vault.z + 2.4, 0.025))
   // factory lots
   for (const id of FACTORY_IDS) {
-    const p = PARK.factories[id]
+    const p = sim.proc[id].pos
     concrete.push(flat(p.x - 3.6, p.z - 3.6, p.x + 3.6, p.z + 3.6))
   }
   // terminal lots: depot yard, airport apron, the port's quay

@@ -151,6 +151,32 @@ export const PLAYER = {
   collectRange: 3.0,
   workRange: 1.8,
   dustInterval: 0.09,
+  /** 🚀 Jetpack: hover height, speed boost at Lv1 and per extra level */
+  flyLevel: 6,
+  flyHover: 1.3,
+  flyBoost: 1.6,
+  flyBoostPerLvl: 0.1,
+  /** never faster than this many times walking speed (keeps it steerable on a phone) */
+  flyBoostMax: 2.3,
+  /** Jetpack upgrades stop here (that's the 2.3× cap) */
+  flyMaxLevel: 8,
+  /** ⚡ Monster Power: damage multiplier per level vs wolves, bears, goats and bosses */
+  slayLevel: 7,
+  slayDmgPerLvl: 1,
+  /** every hit also sends out a shockwave this wide (grows per level), at this share of the damage */
+  slayRadius: 2.8,
+  slayRadiusPerLvl: 0.35,
+  slayWaveFrac: 0.6,
+  /** extra reach toward monsters, per level (capped) */
+  slayReachPerLvl: 0.25,
+  slayReachMax: 2.5,
+  /** less knocked about by bears and bosses: −this share per level */
+  slayKnockbackCut: 0.3,
+}
+
+/** 🚀 how much faster the Jetpack makes you (1 without it) */
+export function flyMult(flyLvl: number) {
+  return flyLvl > 0 ? Math.min(PLAYER.flyBoostMax, PLAYER.flyBoost + PLAYER.flyBoostPerLvl * (flyLvl - 1)) : 1
 }
 
 export const CUSTOMERS = {
@@ -270,8 +296,9 @@ export const STATION_CFG: Record<StationId, StationCfg> = {
 export const STATION_SCALE = {
   capacityMult: 1.35,
   priceMult: 1.2,
-  serviceMult: 0.9,
-  minService: 0.12,
+  /** every upgrade (star levels too) hands items over faster, down to minService */
+  serviceMult: 0.86,
+  minService: 0.025,
   maxLevel: 10,
 }
 
@@ -291,23 +318,33 @@ export const PROC_CFG: Record<
 export const PROC_SCALE = {
   timeMult: 0.88,
   /** star levels keep shortening work down to this */
-  minTime: 0.08,
+  minTime: 0.02,
+  /** factories: steeper speed-ups, and each level turns one input into more products */
+  factoryTimeMult: 0.82,
+  factoryYieldPerLvl: 0.1,
   capMult: 1.3,
   maxLevel: 10,
 }
 
 export const TREES = {
   count: 8,
-  woodPer: 12,
-  regrowTime: 9,
+  woodPer: 20,
+  regrowTime: 4,
   chopRange: 2.2,
 }
 
 /** fishing holes and coal seams work like trees: tap until empty, then they refill */
 export const NODES = {
-  hole: { per: 8, regrowTime: 7, workMult: 1.5, kind: 'fish' as ResKind },
-  seam: { per: 14, regrowTime: 12, workMult: 1.25, kind: 'coal' as ResKind },
-  tree: { per: 12, regrowTime: 9, workMult: 1, kind: 'log' as ResKind },
+  hole: { per: 16, regrowTime: 3, workMult: 1.5, kind: 'fish' as ResKind },
+  seam: { per: 20, regrowTime: 6, workMult: 1.25, kind: 'coal' as ResKind },
+  tree: { per: 20, regrowTime: 4, workMult: 1, kind: 'log' as ResKind },
+  /** a bigger settlement regrows its trees, holes and seams faster: ÷(1 + this × (level − 1)) */
+  regrowPerLevel: 0.06,
+}
+
+/** seconds an emptied tree / fishing hole / coal seam takes to refill */
+export function nodeRegrow(kind: 'tree' | 'hole' | 'seam', level: number) {
+  return NODES[kind].regrowTime / (1 + NODES.regrowPerLevel * Math.max(0, level - 1))
 }
 
 export const ANIMALS = {
@@ -322,7 +359,7 @@ export const ANIMALS = {
   rabbitFlee: 6,
   fleeTrigger: 2.6,
   fleeTime: 0.8,
-  respawnTime: 2.5,
+  respawnTime: 1.2,
   respawnMult: 0.85,
   deerDrops: 3,
   rabbitDrops: 1,
@@ -338,7 +375,7 @@ export const ANIMALS = {
   respawnPerLevel: 0.1,
   /** every level past this adds a deer */
   deerFromLevel: 4,
-  deerMax: 16,
+  deerMax: 18,
   /** tower stops hunting game while this much raw meat lies uncollected */
   maxGroundMeat: 45,
   maxGroundHides: 20,
@@ -566,7 +603,12 @@ export interface PerkDef {
   /** star cost of each level */
   costs: number[]
   requires?: PerkId
+  /** keeps levelling past `costs`, each level PERK_GROWTH× the last */
+  endless?: boolean
 }
+
+/** endless perks: each level past the list costs this much more than the one before */
+export const PERK_GROWTH = 1.6
 
 export const PERKS: Record<PerkId, PerkDef> = {
   headstart: {
@@ -587,14 +629,62 @@ export const PERKS: Record<PerkId, PerkDef> = {
     name: 'Old Friends',
     desc: 'New camps start one settlement level higher',
     costs: [2, 4, 6],
+    endless: true,
   },
-  vip: { icon: '👑', name: 'Royal Favor', desc: 'VIPs show up 50% more often', costs: [2, 3, 4] },
-  tips: { icon: '😍', name: 'Generous Folk', desc: 'Tips pay 25% more', costs: [1, 2, 3] },
-  belts: { icon: '⚙️', name: 'Greased Gears', desc: 'Belts and machines run 15% faster', costs: [2, 3, 5] },
-  arrows: { icon: '🏹', name: 'Eagle Eye', desc: 'The tower fires one more arrow', costs: [3, 6] },
-  offline: { icon: '🌙', name: 'Night Shift', desc: 'Offline earnings last 4h longer and pay 10% more', costs: [2, 4] },
-  events: { icon: '🎪', name: 'Lucky Season', desc: 'Events come 30% more often and last 25% longer', costs: [2, 4] },
-  bossLoot: { icon: '🦣', name: 'Trophy Hunter', desc: 'Boss chests hold 50% more cash', costs: [2, 3] },
+  vip: { icon: '👑', name: 'Royal Favor', desc: 'VIPs show up 50% more often', costs: [2, 3, 4], endless: true },
+  tips: { icon: '😍', name: 'Generous Folk', desc: 'Tips pay 25% more', costs: [1, 2, 3], endless: true },
+  belts: {
+    icon: '⚙️',
+    name: 'Greased Gears',
+    desc: 'Belts and machines run 15% faster',
+    costs: [2, 3, 5],
+    endless: true,
+  },
+  arrows: { icon: '🏹', name: 'Eagle Eye', desc: 'The tower fires one more arrow', costs: [3, 6, 10, 15] },
+  offline: {
+    icon: '🌙',
+    name: 'Night Shift',
+    desc: 'Offline earnings last 4h longer and pay 10% more',
+    costs: [2, 4],
+    endless: true,
+  },
+  events: {
+    icon: '🎪',
+    name: 'Lucky Season',
+    desc: 'Events come 30% more often and last 25% longer',
+    costs: [2, 4, 8],
+  },
+  bossLoot: { icon: '🦣', name: 'Trophy Hunter', desc: 'Boss chests hold 50% more cash', costs: [2, 3], endless: true },
+  // ---- keep your progress when you move ----
+  pioneer: {
+    icon: '🗺️',
+    name: 'Pioneers',
+    desc: 'New camps open with a district already built: Tannery, then Fishery, then Coal Mine',
+    costs: [10, 20, 35],
+    requires: 'crew',
+  },
+  blueprints: {
+    icon: '📐',
+    name: 'Blueprints',
+    desc: 'New camps start with every conveyor and cash belt built, then every machine too',
+    costs: [25, 50],
+    requires: 'pioneer',
+  },
+  charter: {
+    icon: '🏭',
+    name: 'Industrial Charter',
+    desc: 'New camps open with the Industrial Park, then the Port, then the Airport',
+    costs: [60, 120, 200],
+    requires: 'blueprints',
+  },
+}
+
+/** star cost of a perk's next level (null when it's maxed) */
+export function perkLevelCost(id: PerkId, lvl: number): number | null {
+  const def = PERKS[id]
+  if (lvl < def.costs.length) return def.costs[lvl]
+  if (!def.endless) return null
+  return Math.round(def.costs[def.costs.length - 1] * Math.pow(PERK_GROWTH, lvl - def.costs.length + 1))
 }
 export const PERK_IDS = Object.keys(PERKS) as PerkId[]
 
@@ -674,6 +764,8 @@ export const BELT = {
   speedPerLvl: 1.1,
   /** gap between items riding the belt */
   spacing: 0.62,
+  /** past this level a belt would outrun what feeds it (and look like it's skipping): upgrades stop here */
+  maxLevel: 10,
   width: 0.8,
 }
 
@@ -922,8 +1014,7 @@ export function machineWorkTime(id: MachineId, level: number) {
 
 /** Preserve the first three levels, then grow throughput steadily. */
 export function machineSpeedMult(level: number) {
-  return Math.pow(1 / MACHINE.speedMult, Math.min(2, Math.max(0, level - 1))) *
-    (1 + Math.max(0, level - 3) * 0.2)
+  return Math.pow(1 / MACHINE.speedMult, Math.min(2, Math.max(0, level - 1))) * (1 + Math.max(0, level - 3) * 0.2)
 }
 
 /** a belt takes over its haulers' job: they retire and their hire pad goes away */
@@ -941,7 +1032,9 @@ export const CASH_BELT = {
   /** height the bundles ride at (clears the stall roofs) */
   height: 3.4,
   /** each bundle takes this share of the pile (at least one bill) */
-  chunkFrac: 0.12,
+  chunkFrac: 0.25,
+  /** cash belts run this much faster than item belts of the same level */
+  speedMult: 2,
   /** caravan pay has no belt: it's banked straight into the chest at this rate once belts run */
   bankRate: 400,
 }
@@ -1002,7 +1095,7 @@ export const CASH_PATHS: Record<CashBeltId, V2[]> = {
 }
 
 export function beltSpeed(level: number) {
-  return BELT.speed + BELT.speedPerLvl * Math.max(0, level - 1)
+  return BELT.speed + BELT.speedPerLvl * Math.max(0, Math.min(level, BELT.maxLevel) - 1)
 }
 
 // ---- furnace: burns coal; while lit, every sale pays a bonus ----
@@ -1148,7 +1241,12 @@ export function stationServiceTime(id: StationId, lvl: number) {
   return Math.max(STATION_SCALE.minService, STATION_CFG[id].baseServiceTime * Math.pow(STATION_SCALE.serviceMult, lvl))
 }
 export function procTime(id: ProcessorId, lvl: number) {
-  return Math.max(PROC_SCALE.minTime, PROC_CFG[id].baseTime * Math.pow(PROC_SCALE.timeMult, lvl))
+  const mult = (FACTORY_IDS as ProcessorId[]).includes(id) ? PROC_SCALE.factoryTimeMult : PROC_SCALE.timeMult
+  return Math.max(PROC_SCALE.minTime, PROC_CFG[id].baseTime * Math.pow(mult, lvl))
+}
+/** products a factory makes per input item (1 for camp workshops) */
+export function procYield(id: ProcessorId, lvl: number) {
+  return (FACTORY_IDS as ProcessorId[]).includes(id) ? 1 + PROC_SCALE.factoryYieldPerLvl * lvl : 1
 }
 export function procInCap(id: ProcessorId, lvl: number) {
   if (lvl >= PROC_SCALE.maxLevel) return UNLIMITED
@@ -1355,6 +1453,31 @@ export const PAD_DEFS: PadDef[] = [
   { id: 'p_speed', x: -2.5, z: 6.5, label: 'Boots', icon: '👟', baseCost: 250, costMult: 1.9, maxLevel: 5 },
   { id: 'p_carry', x: 2.5, z: 6.5, label: 'Backpack', icon: '🎒', baseCost: 250, costMult: 1.9, maxLevel: 6 },
   { id: 'p_power', x: 0, z: 9.8, label: 'Sharp Axe', icon: '🪓', baseCost: 400, costMult: 1.9, maxLevel: 5 },
+  // late-game superpowers for yourself
+  {
+    id: 'p_fly',
+    x: -5.4,
+    z: 10.8,
+    label: 'Jetpack',
+    icon: '🚀',
+    baseCost: 30000,
+    costMult: 1.9,
+    maxLevel: PLAYER.flyMaxLevel,
+    gated: true,
+    requires: ['p_speed'],
+  },
+  {
+    id: 'p_slayer',
+    x: 0,
+    z: 13.4,
+    label: 'Monster Power',
+    icon: '⚡',
+    baseCost: 25000,
+    costMult: 2.2,
+    maxLevel: ENDLESS,
+    gated: true,
+    requires: ['p_power'],
+  },
   // defense + crew
   { id: 'guard', x: 5.0, z: -5.8, label: 'Guard', icon: '🛡️', baseCost: 1300, costMult: 2, maxLevel: 3 },
   {
@@ -1414,7 +1537,7 @@ export const PAD_DEFS: PadDef[] = [
     icon: '⚙️',
     baseCost: 4000,
     costMult: 2.2,
-    maxLevel: ENDLESS,
+    maxLevel: BELT.maxLevel,
     gated: true,
     requires: ['lumberjack', 'logCarrier'],
   },
@@ -1426,7 +1549,7 @@ export const PAD_DEFS: PadDef[] = [
     icon: '⚙️',
     baseCost: 5500,
     costMult: 2.2,
-    maxLevel: ENDLESS,
+    maxLevel: BELT.maxLevel,
     gated: true,
     requires: ['cook', 'collector', 'runner'],
   },
@@ -1438,7 +1561,7 @@ export const PAD_DEFS: PadDef[] = [
     icon: '⚙️',
     baseCost: 8000,
     costMult: 2.2,
-    maxLevel: ENDLESS,
+    maxLevel: BELT.maxLevel,
     gated: true,
     requires: ['tailor', 'coatRunner'],
   },
@@ -1450,7 +1573,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '💸',
     baseCost: 6000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: BELT.maxLevel,
+    gated: true,
     requires: ['cashier', 'belt_wood@1', 'belt_meat@1'],
   },
   // ice fishery (Level 6)
@@ -1498,7 +1622,7 @@ export const PAD_DEFS: PadDef[] = [
     icon: '⚙️',
     baseCost: 11000,
     costMult: 2.2,
-    maxLevel: ENDLESS,
+    maxLevel: BELT.maxLevel,
     gated: true,
     requires: ['fisher', 'smoker', 'fishRunner'],
   },
@@ -1641,7 +1765,7 @@ export const PAD_DEFS: PadDef[] = [
     icon: '⚙️',
     baseCost: 16000,
     costMult: 2.2,
-    maxLevel: ENDLESS,
+    maxLevel: BELT.maxLevel,
     gated: true,
     requires: ['miner', 'coalCarrier'],
   },
@@ -1811,8 +1935,13 @@ export const PAD_BY_ID: Record<string, PadDef> = Object.fromEntries(PAD_DEFS.map
 
 export function padCost(def: PadDef, level: number) {
   // Keep existing purchases priced identically; later automation levels remain attainable.
-  if (def.id.startsWith('m_') || ['belt_wood', 'belt_meat', 'belt_coat', 'belt_fish', 'belt_coal'].includes(def.id)) {
-    return Math.round(def.baseCost * Math.pow(def.costMult, Math.min(level, 3)) * Math.pow(1.35, Math.max(0, level - 3)))
+  if (
+    def.id.startsWith('m_') ||
+    ['belt_wood', 'belt_meat', 'belt_coat', 'belt_fish', 'belt_coal', 'belt_cash'].includes(def.id)
+  ) {
+    return Math.round(
+      def.baseCost * Math.pow(def.costMult, Math.min(level, 3)) * Math.pow(1.35, Math.max(0, level - 3)),
+    )
   }
   return Math.round(def.baseCost * Math.pow(def.costMult, level))
 }
