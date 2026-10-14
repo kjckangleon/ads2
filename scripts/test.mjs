@@ -11,6 +11,7 @@ try {
   await build({
     configFile: false,
     logLevel: 'warn',
+    ssr: { noExternal: true },
     build: {
       ssr: 'tests/save.test.ts',
       outDir,

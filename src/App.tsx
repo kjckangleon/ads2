@@ -4,8 +4,10 @@ import { Game } from './game/Game'
 import { HUD } from './ui/HUD'
 import { Joystick } from './ui/Joystick'
 import { DebugPanel } from './ui/DebugPanel'
+import { useUI } from './game/uiStore'
 
 export function App() {
+  const settlementRun = useUI((s) => s.settlementRun)
   useEffect(() => {
     const splash = document.getElementById('splash')
     if (splash) {
@@ -21,7 +23,7 @@ export function App() {
     <div className="app">
       <Game />
       <HUD />
-      <Joystick />
+      <Joystick key={settlementRun} />
       {import.meta.env.DEV && <DebugPanel />}
       <Analytics />
     </div>

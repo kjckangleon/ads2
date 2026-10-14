@@ -3,7 +3,7 @@
 // run on their own.
 
 import type { Sim } from '../types'
-import { PROC_IDS, PLAYER, FACTORY_IDS } from '../balance'
+import { PROC_IDS, PLAYER, FACTORY_IDS, MACHINE_IDS, MACHINE_CFG, machineSpeedMult } from '../balance'
 import { dist } from '../util'
 import { sfx } from '../audio'
 import { machineStaffs } from './belts'
@@ -21,11 +21,13 @@ export function updateProcessors(sim: Sim, dt: number) {
 
     if (staffed && pr.inCount > 0 && pr.outCount < pr.outCap) {
       pr.active = true
+      const machine = MACHINE_IDS.find((mid) => MACHINE_CFG[mid].proc === id && sim.machines[mid].level > 0)
+      const workTime = Math.max(0.04, pr.time / (machine ? machineSpeedMult(sim.machines[machine].level) : 1))
       pr.t += dt
       if (id === 'tailor') sfx.stitch()
       else if (!factory) sfx.sizzle()
-      if (pr.t >= pr.time) {
-        pr.t = 0
+      while (pr.t >= workTime && pr.inCount > 0 && pr.outCount < pr.outCap) {
+        pr.t -= workTime
         pr.inCount--
         pr.outCount++
         sim.fx.push({

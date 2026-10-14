@@ -59,10 +59,11 @@ function AdaptiveResolution({ quality }: { quality: Quality }) {
 
 export function Game() {
   const quality = useUI((s) => s.quality)
+  const settlementRun = useUI((s) => s.settlementRun)
   const shadows = quality !== 'low'
   return (
     <Canvas
-      key={quality}
+      key={`${quality}:${settlementRun}`}
       shadows={shadows}
       dpr={startDpr(quality)}
       camera={{ fov: 42, near: 0.5, far: 260, position: [0, 21.5, 19.5] }}

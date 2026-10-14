@@ -24,7 +24,7 @@ These are useful foundations for a mobile game.
 - Save normal/double claims immediately, preserving cash and the daily double
   limit even if the player refreshes before the next autosave.
 - Add `npm test`, using Vite and Node's built-in runner without new dependencies.
-  Nine regression tests cover these behaviors, v2/v3 compatibility, the offline
+  Regression tests cover these behaviors, v2/v3 compatibility, the offline
   time cap, and protection against old-camp saves during prestige.
 
 No balance changes or new save-format version are needed: these fields are
@@ -57,3 +57,21 @@ optional additions to v3.
 This review is based on source inspection and automated simulation checks;
 it does not establish gameplay balance or actual-device frame rates. The
 remaining inventory/background findings are follow-up work, not claimed fixes.
+
+## Requested continuation: automation, freight, settlement moves
+
+- Automation machines and camp delivery belts now have continuing, settlement-level
+  gated upgrades. Existing first-three-level costs are preserved; later costs grow
+  more gently. Auto-Grill, Sewing Machine and Auto-Smoker levels now speed up the
+  actual processor, and processing retains fractional progress between frames.
+- Ships dispatch in 3 seconds initially and 15 seconds after departure; planes in
+  2 and 12 seconds. Terminal levels reduce repeat waits to floors of 6 / 5 seconds.
+  Ship approach is shorter, planes have 60 seconds to load, and full-order bonuses
+  are now 100% / 150%. HUD countdowns distinguish dispatch, approach and loading.
+- Prestige previously depended on saving and navigating the browser back through
+  startup. It now stages a fresh camp and switches the live simulation after the
+  animation, resetting scene/control state. It works even if local storage is
+  unavailable (persistence still requires storage). Stars, spending and perks carry
+  over; export allocation history is isolated per settlement.
+- Regression coverage includes an actual paid upgrade after full-map unlock/load,
+  machine output, freight timing and payments, repeated prestige and blocked storage.

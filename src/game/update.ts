@@ -10,7 +10,7 @@ import { updateWorkers } from './systems/workers'
 import { updateProcessors } from './systems/processors'
 import { updateBelts } from './systems/belts'
 import { updateFreight, bigOrderView } from './systems/freight'
-import { updateMeta, pendingStars, canDoubleOffline } from './systems/meta'
+import { updateMeta, pendingStars, canDoubleOffline, finishSettlementMove } from './systems/meta'
 import { starSalesMult } from './balance'
 import { updateTasks, taskProgress, taskText } from './systems/tasks'
 import { updateEvents } from './systems/events'
@@ -57,6 +57,7 @@ function syncUI(sim: Sim) {
   const ship = bigOrderView(sim, 'ship')
   const plane = bigOrderView(sim, 'plane')
   const next: Partial<UIState> = {
+    settlementRun: sim.meta.runs,
     money: Math.floor(sim.money),
     objectiveText: objectiveText(sim),
     objectiveFlash: sim.objectiveFlash > 0,
@@ -139,7 +140,13 @@ export function tick(sim: Sim, dt: number) {
   // packing up for a new settlement: freeze the old camp (and never save it again)
   if (sim.moving > 0) {
     sim.moving -= dt / Math.max(1, sim.speed)
-    if (sim.moving <= 0 && typeof window !== 'undefined' && window.location) window.location.reload()
+    if (sim.moving <= 0) {
+      const next = finishSettlementMove(sim)
+      useUI.setState({ panel: '', seenNotice: 0, noticesKey: '', tasksKey: '' })
+      uiSyncT = 0
+      syncUI(next)
+      return
+    }
     syncUI(sim)
     return
   }

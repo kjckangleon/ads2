@@ -8,9 +8,12 @@ import { perk } from '../perks'
 import { grantPad } from './economy'
 import { fmt } from '../format'
 import { sfx } from '../audio'
-import { createSim } from '../state'
+import { createSim, replaceSim } from '../state'
+import { resetInput } from '../input'
 import { saveNow } from '../save'
 import { banner } from './progress'
+
+const pendingSettlements = new WeakMap<Sim, Sim>()
 
 /** Frost Stars this run would earn if the settlement moved now */
 export function pendingStars(sim: Sim) {
@@ -29,7 +32,7 @@ export function canDoubleOffline(sim: Sim) {
 
 /**
  * Pack up: a brand-new camp is written to the save with the Frost Stars added,
- * then the page reloads into it once the "moving" fade has played.
+ * then the live simulation switches to it once the "moving" fade has played.
  */
 export function moveSettlement(sim: Sim) {
   const gained = pendingStars(sim)
@@ -45,9 +48,24 @@ export function moveSettlement(sim: Sim) {
   next.incomeRate = 0
   applyStartPerks(next)
   saveNow(next)
+  pendingSettlements.set(sim, next)
   sim.moving = PRESTIGE.moveTime
   sim.movingStars = gained
   sfx.levelUp()
+}
+
+/** Complete the move even when storage or page navigation is unavailable. */
+export function finishSettlementMove(old: Sim): Sim {
+  const next = pendingSettlements.get(old)
+  if (!next) {
+    old.moving = 0
+    return old
+  }
+  pendingSettlements.delete(old)
+  resetInput()
+  replaceSim(next)
+  saveNow(next)
+  return next
 }
 
 /** Head Start / Veteran Crew / Old Friends: what a fresh camp begins with */

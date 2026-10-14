@@ -912,13 +912,18 @@ export const MACHINE = {
   bufCap: 16,
   /** each upgrade works this much faster */
   speedMult: 0.72,
-  maxLevel: 3,
   /** Skinning Machine: hides skinned per raw meat it pulls in, by level */
   hidePerMeat: [0.5, 0.8, 1.2],
 }
 
 export function machineWorkTime(id: MachineId, level: number) {
-  return (MACHINE_CFG[id].workTime ?? 0.3) * Math.pow(MACHINE.speedMult, Math.max(0, level - 1))
+  return Math.max(0.04, (MACHINE_CFG[id].workTime ?? 0.3) / machineSpeedMult(level))
+}
+
+/** Preserve the first three levels, then grow throughput steadily. */
+export function machineSpeedMult(level: number) {
+  return Math.pow(1 / MACHINE.speedMult, Math.min(2, Math.max(0, level - 1))) *
+    (1 + Math.max(0, level - 3) * 0.2)
 }
 
 /** a belt takes over its haulers' job: they retire and their hire pad goes away */
@@ -1099,8 +1104,8 @@ export const FREIGHT = {
     wantPerLevel: 0.6,
     maxWant: 60,
   },
-  ship: { first: 20, every: 75, timer: 75, base: 40, perShip: 8, perLevel: 3, max: 500, bonus: 0.6 },
-  plane: { first: 15, every: 60, timer: 45, base: 12, perPlane: 3, perLevel: 1, max: 200, bonus: 1.0 },
+  ship: { first: 3, every: 15, minEvery: 6, timer: 75, base: 40, perShip: 8, perLevel: 3, max: 500, bonus: 1.0 },
+  plane: { first: 2, every: 12, minEvery: 5, timer: 60, base: 12, perPlane: 3, perLevel: 1, max: 200, bonus: 1.5 },
   /** export belts: share of the camp source they may take, by belt level (they also take any overflow) */
   exportShare: [0, 0.4, 0.55, 0.7],
   exportOverflow: 8,
@@ -1402,7 +1407,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '⚙️',
     baseCost: 4000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['lumberjack', 'logCarrier'],
   },
   {
@@ -1413,7 +1419,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '⚙️',
     baseCost: 5500,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['cook', 'collector', 'runner'],
   },
   {
@@ -1424,7 +1431,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '⚙️',
     baseCost: 8000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['tailor', 'coatRunner'],
   },
   {
@@ -1483,7 +1491,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '⚙️',
     baseCost: 11000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['fisher', 'smoker', 'fishRunner'],
   },
   // coal mine (Level 8)
@@ -1541,7 +1550,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '🪚',
     baseCost: 9000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['lumberjack', 'belt_wood@1'],
   },
   {
@@ -1552,7 +1562,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '🔪',
     baseCost: 12000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['collector', 'tower'],
   },
   {
@@ -1563,7 +1574,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '🤖',
     baseCost: 10000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['cook', 'kitchen_up@5'],
   },
   {
@@ -1574,7 +1586,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '🤖',
     baseCost: 16000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['tailor', 'tailor_up@3'],
   },
   {
@@ -1585,7 +1598,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '🌀',
     baseCost: 24000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['fisher'],
   },
   {
@@ -1596,7 +1610,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '🤖',
     baseCost: 22000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['smoker', 'smoke_up@3'],
   },
   {
@@ -1607,7 +1622,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '⛏️',
     baseCost: 50000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['miner', 'belt_coal@1'],
   },
   {
@@ -1618,7 +1634,8 @@ export const PAD_DEFS: PadDef[] = [
     icon: '⚙️',
     baseCost: 16000,
     costMult: 2.2,
-    maxLevel: 3,
+    maxLevel: ENDLESS,
+    gated: true,
     requires: ['miner', 'coalCarrier'],
   },
 
@@ -1786,5 +1803,9 @@ export const PAD_DEFS: PadDef[] = [
 export const PAD_BY_ID: Record<string, PadDef> = Object.fromEntries(PAD_DEFS.map((d) => [d.id, d]))
 
 export function padCost(def: PadDef, level: number) {
+  // Keep existing purchases priced identically; later automation levels remain attainable.
+  if (def.id.startsWith('m_') || ['belt_wood', 'belt_meat', 'belt_coat', 'belt_fish', 'belt_coal'].includes(def.id)) {
+    return Math.round(def.baseCost * Math.pow(def.costMult, Math.min(level, 3)) * Math.pow(1.35, Math.max(0, level - 3)))
+  }
   return Math.round(def.baseCost * Math.pow(def.costMult, level))
 }
