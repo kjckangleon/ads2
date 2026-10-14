@@ -4,6 +4,7 @@ import { dist, lerpAngle, damp } from '../util'
 import { sfx } from '../audio'
 import { hurtAnimal, countDrops } from './animals'
 import { damageWolf } from './wolves'
+import { perk } from '../perks'
 
 const FIRE_HEIGHT = 3.6
 
@@ -76,7 +77,7 @@ export function updateTower(sim: Sim, dt: number) {
 
   const range = towerRange(t.rngLvl)
   const dmg = towerDamage(t.dmgLvl)
-  const arrows = towerArrows(t.dmgLvl + t.spdLvl + t.rngLvl)
+  const arrows = towerArrows(t.dmgLvl + t.spdLvl + t.rngLvl) + perk(sim, 'arrows')
   // stop hunting game while the meadow is littered with uncollected meat
   // (wolves are always fair game)
   const huntGame = countDrops(sim, 'raw') < ANIMALS.maxGroundMeat

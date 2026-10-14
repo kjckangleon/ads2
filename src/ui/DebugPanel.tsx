@@ -13,6 +13,8 @@ import { spawnWolf } from '../game/systems/wolves'
 import { summonCaravan } from '../game/systems/caravan'
 import { applyPad } from '../game/systems/economy'
 import { moveSettlement } from '../game/systems/meta'
+import { startEvent } from '../game/systems/events'
+import type { EventId } from '../game/types'
 
 export function DebugPanel() {
   const open = useUI((s) => s.debugOpen)
@@ -45,6 +47,14 @@ export function DebugPanel() {
         <button onClick={() => (s.lastWall -= 2 * 3600 * 1000)}>away 2h</button>
         <button onClick={() => (s.stats.earned += 1e6)}>+1M earned</button>
         <button onClick={() => moveSettlement(s)}>move now</button>
+        <button onClick={() => (s.meta.stars += 5)}>+5 ❄️</button>
+      </div>
+      <div className="debug-row">
+        {(['blizzard', 'festival', 'goldRush', 'siege', 'boss'] as EventId[]).map((id) => (
+          <button key={id} onClick={() => startEvent(s, id)}>
+            {id}
+          </button>
+        ))}
       </div>
       <div className="debug-row">
         <button
@@ -123,7 +133,8 @@ export function DebugPanel() {
       </div>
       <pre className="debug-info">
         {[
-          `❄️ ${s.meta.stars} stars  runs ${s.meta.runs}  income ${Math.round(s.incomeRate)}/s`,
+          `❄️ ${s.meta.stars} stars (${s.meta.stars - s.meta.spent} free)  runs ${s.meta.runs}  income ${Math.round(s.incomeRate)}/s`,
+          `event ${s.event ? `${s.event.id} ${s.event.t.toFixed(0)}s` : `next in ${s.eventNext.toFixed(0)}s`}  loot ${s.loot.length}  perks ${JSON.stringify(s.meta.perks)}`,
           `money ${Math.floor(s.money)}  obj ${s.objective}  ⭐${s.rep.level} (${s.rep.xp}/${xpForLevel(s.rep.level)})`,
           `rush ${s.rush.n} (best ${s.rush.best})  tips ${s.stats.tips}  angry ${s.stats.angry}  vips ${s.stats.vips}`,
           `clock ${s.clock.enabled ? `${s.clock.night ? 'night' : 'day'} ${s.clock.day} t${s.clock.t.toFixed(0)}` : 'off'}  raids ${s.raid.count} stolen ${s.raid.stolen}`,

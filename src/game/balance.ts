@@ -1,4 +1,19 @@
-import type { ResKind, StationId, ProcessorId, PileId, WorkerRole, ZoneId, BeltId, PadBeltId, MachineId, AnimalKind, V2, NodeKind } from './types'
+import type {
+  ResKind,
+  StationId,
+  ProcessorId,
+  PileId,
+  WorkerRole,
+  ZoneId,
+  BeltId,
+  PadBeltId,
+  MachineId,
+  AnimalKind,
+  V2,
+  NodeKind,
+  EventId,
+  PerkId,
+} from './types'
 
 // All tuning values live here — no magic numbers scattered through systems.
 
@@ -394,6 +409,81 @@ export const ECONOMY = {
   scale: 5,
 }
 
+// ---- bosses: a Mammoth or Yeti invades the meadow ----
+
+export const BOSS = {
+  mammoth: { minHp: 400, walk: 1.2, charge: 4.2, drops: 14, hides: 4, knockback: 4.5, label: 'Mammoth', icon: '🦣' },
+  yeti: { minHp: 300, walk: 1.8, charge: 6.0, drops: 10, hides: 3, knockback: 5.5, label: 'Yeti', icon: '❄️' },
+  /** seconds of full tower fire it takes to bring one down (so it's a fight at any upgrade level) */
+  towerSeconds: 26,
+  /** it gives up and leaves after this long */
+  stay: 120,
+  chestMult: 3,
+  xpFrac: 0.4,
+}
+
+/** sustained tower damage per second, used to size boss health */
+export function towerDps(dmgLvl: number, spdLvl: number, rngLvl: number, extraArrows = 0) {
+  return (towerDamage(dmgLvl) * (towerArrows(dmgLvl + spdLvl + rngLvl) + extraArrows)) / towerCooldown(spdLvl)
+}
+
+// ---- random events ----
+
+export const EVENTS = {
+  unlockLevel: 5,
+  firstDelay: 75,
+  /** seconds between events */
+  gapMin: 130,
+  gapMax: 220,
+  dur: { blizzard: 40, festival: 30, goldRush: 24, siege: 55, boss: BOSS.stay } as Record<EventId, number>,
+  weight: { blizzard: 1, festival: 1, goldRush: 1, siege: 0.8, boss: 1.1 } as Record<EventId, number>,
+  bossLevel: 8,
+  blizzardSpawn: 2.2,
+  blizzardPay: 2,
+  festivalSpawn: 1.4,
+  /** gold rush: a bundle drops this often, worth this share of a level-up gift */
+  goldEvery: 0.35,
+  goldShare: 0.06,
+  goldTtl: 9,
+  goldRadius: 13,
+  siegeExtra: 3,
+  alphaHpMult: 7,
+  alphaBountyMult: 12,
+}
+
+export const EVENT_INFO: Record<EventId, { icon: string; name: string; sub: string; tone: 'good' | 'warn' }> = {
+  blizzard: { icon: '❄️', name: 'Blizzard!', sub: 'Twice the survivors, and they pay double', tone: 'good' },
+  festival: { icon: '🎪', name: 'Festival!', sub: 'Every survivor is a VIP', tone: 'good' },
+  goldRush: { icon: '💰', name: 'Gold Rush!', sub: 'Grab the cash before it melts', tone: 'good' },
+  siege: { icon: '🐺', name: 'Wolf Siege!', sub: 'An alpha leads a pack in broad daylight', tone: 'warn' },
+  boss: { icon: '🦣', name: 'A giant appears!', sub: 'Bring it down for a treasure chest', tone: 'warn' },
+}
+
+// ---- Frost Star shop ----
+
+export interface PerkDef {
+  icon: string
+  name: string
+  desc: string
+  /** star cost of each level */
+  costs: number[]
+  requires?: PerkId
+}
+
+export const PERKS: Record<PerkId, PerkDef> = {
+  headstart: { icon: '🍖', name: 'Head Start', desc: 'New camps open with the Meat Stall and Hunting Tower built', costs: [3] },
+  crew: { icon: '🪓', name: 'Veteran Crew', desc: 'New camps start with a Lumberjack, Cook and Food Runner', costs: [4], requires: 'headstart' },
+  startLevel: { icon: '⭐', name: 'Old Friends', desc: 'New camps start one settlement level higher', costs: [2, 4, 6] },
+  vip: { icon: '👑', name: 'Royal Favor', desc: 'VIPs show up 50% more often', costs: [2, 3, 4] },
+  tips: { icon: '😍', name: 'Generous Folk', desc: 'Tips pay 25% more', costs: [1, 2, 3] },
+  belts: { icon: '⚙️', name: 'Greased Gears', desc: 'Belts and machines run 15% faster', costs: [2, 3, 5] },
+  arrows: { icon: '🏹', name: 'Eagle Eye', desc: 'The tower fires one more arrow', costs: [3, 6] },
+  offline: { icon: '🌙', name: 'Night Shift', desc: 'Offline earnings last 4h longer and pay 10% more', costs: [2, 4] },
+  events: { icon: '🎪', name: 'Lucky Season', desc: 'Events come 30% more often and last 25% longer', costs: [2, 4] },
+  bossLoot: { icon: '🦣', name: 'Trophy Hunter', desc: 'Boss chests hold 50% more cash', costs: [2, 3] },
+}
+export const PERK_IDS = Object.keys(PERKS) as PerkId[]
+
 // ---- prestige: Frost Stars carry over when the settlement moves ----
 
 export const PRESTIGE = {
@@ -594,6 +684,8 @@ export const MACHINE = {
   /** each upgrade works this much faster */
   speedMult: 0.72,
   maxLevel: 3,
+  /** Skinning Machine: hides skinned per raw meat it pulls in, by level */
+  hidePerMeat: [0.5, 0.8, 1.2],
 }
 
 export function machineWorkTime(id: MachineId, level: number) {
@@ -768,6 +860,8 @@ export function bigGameTarget(kind: 'goat' | 'bear', level: number) {
 export function animalHp(kind: AnimalKind, level: number) {
   if (kind === 'deer') return ANIMALS.deerHp
   if (kind === 'rabbit') return ANIMALS.rabbitHp
+  // bosses get their health from bossHp() when the event spawns them
+  if (kind === 'mammoth' || kind === 'yeti') return BOSS[kind].minHp
   const c = ANIMALS[kind]
   return c.hp + c.hpPerLevel * Math.max(0, level - c.level)
 }

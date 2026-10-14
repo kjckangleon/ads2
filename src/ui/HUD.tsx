@@ -3,7 +3,9 @@ import { useUI } from '../game/uiStore'
 import { setMuted, isMuted } from '../game/audio'
 import { fmt } from '../game/format'
 import { sim } from '../game/state'
-import { claimOffline } from '../game/systems/meta'
+import { claimOffline, buyPerk, canBuyPerk, perkCost, freeStars } from '../game/systems/meta'
+import { PERKS, PERK_IDS } from '../game/balance'
+import { perk } from '../game/perks'
 
 /** Rolls toward the real balance each animation frame and bumps on gains. */
 function Money() {
@@ -36,20 +38,6 @@ function Money() {
       <span key={bump} className={bump ? 'amount bump' : 'amount'}>
         {shown < 1e6 ? shown.toLocaleString() : fmt(shown)}
       </span>
-    </div>
-  )
-}
-
-function Banner() {
-  const id = useUI((s) => s.bannerId)
-  const text = useUI((s) => s.bannerText)
-  const sub = useUI((s) => s.bannerSub)
-  const tone = useUI((s) => s.bannerTone)
-  if (!id) return null
-  return (
-    <div key={id} className={`hud-banner tone-${tone}`}>
-      <div className="hud-banner-text">{text}</div>
-      {sub && <div className="hud-banner-sub">{sub}</div>}
     </div>
   )
 }
@@ -110,6 +98,41 @@ function Clock() {
   )
 }
 
+/** the running random event: icon, name, time left */
+function EventPill() {
+  const icon = useUI((s) => s.eventIcon)
+  const name = useUI((s) => s.eventName)
+  const frac = useUI((s) => s.eventFrac)
+  const left = useUI((s) => s.eventLeft)
+  const boss = useUI((s) => s.bossName)
+  const bossFrac = useUI((s) => s.bossFrac)
+  const bossHp = useUI((s) => s.bossHp)
+  if (!icon) return null
+  if (boss) {
+    return (
+      <div className="hud-boss">
+        <span>
+          {icon} {boss} <small>{left}s</small>
+        </span>
+        <div className="bar">
+          <div style={{ width: `${bossFrac * 100}%` }} />
+        </div>
+        <small className="hud-boss-hp">{bossHp}</small>
+      </div>
+    )
+  }
+  return (
+    <div className="hud-event">
+      <span>
+        {icon} {name} <small>{left}s</small>
+      </span>
+      <div className="bar">
+        <div style={{ width: `${frac * 100}%` }} />
+      </div>
+    </div>
+  )
+}
+
 /** permanent prestige boost, shown once the first settlement has moved */
 function Stars() {
   const stars = useUI((s) => s.stars)
@@ -138,7 +161,7 @@ function Offline() {
   const canDouble = useUI((s) => s.offlineDouble)
   if (amount <= 0) return null
   return (
-    <div className="hud-modal-backdrop">
+    <div className="hud-modal-backdrop hud-interactive">
       <div className="hud-modal">
         <div className="hud-modal-title">❄️ While you were away</div>
         <div className="hud-modal-sub">Your crew kept the camp running for {duration(seconds)}</div>
@@ -189,7 +212,7 @@ function Furnace() {
 /** The rotating task board: three goals with a reward each. */
 function Tasks() {
   const tasks = useUI((s) => s.tasks)
-  if (!tasks.length) return null
+  if (!tasks.length) return <div className="hud-panel-empty">🎯 Tasks open at Settlement Level 3</div>
   return (
     <div className="hud-tasks">
       {tasks.map((t) => (
@@ -208,6 +231,96 @@ function Tasks() {
   )
 }
 
+/** 🔔 alert history: newest first, coloured by tone */
+function Alerts() {
+  const notices = useUI((s) => s.notices)
+  if (!notices.length) return <div className="hud-panel-empty">No alerts yet</div>
+  return (
+    <div className="hud-alerts">
+      {notices.map((n) => (
+        <div key={n.id} className={`hud-alert tone-${n.tone}`}>
+          <div className="hud-alert-row">
+            <span className="hud-alert-text">{n.text}</span>
+            <span className="hud-alert-ago">{n.ago}</span>
+          </div>
+          {n.sub && <div className="hud-alert-sub">{n.sub}</div>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** ❄️ Frost Star shop: spend stars on permanent perks */
+function Shop() {
+  const set = useUI((s) => s.set)
+  // stars / perks change rarely: re-read the sim while the shop is open
+  const [, tick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 400)
+    return () => clearInterval(t)
+  }, [])
+  return (
+    <div className="hud-modal-backdrop hud-interactive" onClick={() => set({ panel: '' })}>
+      <div className="hud-modal hud-shop" onClick={(e) => e.stopPropagation()}>
+        <div className="hud-modal-title">❄️ Frost Star Shop</div>
+        <div className="hud-modal-sub">
+          {freeStars(sim)} to spend · bonuses from all {sim.meta.stars} stars stay forever
+        </div>
+        <div className="hud-shop-list">
+          {PERK_IDS.map((id) => {
+            const def = PERKS[id]
+            const lvl = perk(sim, id)
+            const cost = perkCost(sim, id)
+            const locked = def.requires && perk(sim, def.requires) === 0
+            return (
+              <div key={id} className="hud-perk">
+                <span className="hud-perk-icon">{def.icon}</span>
+                <div className="hud-perk-info">
+                  <div className="hud-perk-name">
+                    {def.name} <small>{lvl}/{def.costs.length}</small>
+                  </div>
+                  <div className="hud-perk-desc">{locked ? `Needs ${PERKS[def.requires!].name}` : def.desc}</div>
+                </div>
+                <button
+                  className="hud-perk-buy"
+                  disabled={!canBuyPerk(sim, id)}
+                  onClick={() => {
+                    buyPerk(sim, id)
+                    tick((n) => n + 1)
+                  }}
+                >
+                  {cost === null ? 'MAX' : `❄️ ${cost}`}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+        <div className="hud-modal-buttons">
+          <button className="hud-modal-btn" onClick={() => set({ panel: '' })}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** a HUD toggle button with an optional badge */
+function PanelButton({ id, icon, badge }: { id: 'alerts' | 'tasks' | 'shop'; icon: string; badge?: number }) {
+  const panel = useUI((s) => s.panel)
+  const set = useUI((s) => s.set)
+  const latest = useUI((s) => s.latestNotice)
+  return (
+    <button
+      className={`hud-btn${panel === id ? ' active' : ''}`}
+      onClick={() => set(panel === id ? { panel: '' } : { panel: id, ...(id === 'alerts' ? { seenNotice: latest } : {}) })}
+    >
+      {icon}
+      {badge ? <span className="hud-badge">{badge > 9 ? '9+' : badge}</span> : null}
+    </button>
+  )
+}
+
 export function HUD() {
   const objective = useUI((s) => s.objectiveText)
   const flash = useUI((s) => s.objectiveFlash)
@@ -217,6 +330,14 @@ export function HUD() {
   const muted = useUI((s) => s.muted)
   const set = useUI((s) => s.set)
   const debugOpen = useUI((s) => s.debugOpen)
+  const panel = useUI((s) => s.panel)
+  const notices = useUI((s) => s.notices)
+  const seen = useUI((s) => s.seenNotice)
+  const tasks = useUI((s) => s.tasks)
+  const stars = useUI((s) => s.stars)
+  const free = useUI((s) => s.freeStars)
+  const unread = notices.filter((n) => n.id > seen).length
+  const tasksReady = tasks.filter((t) => t.done).length
 
   return (
     <div className="hud">
@@ -235,10 +356,13 @@ export function HUD() {
         <div className={`hud-objective${flash ? ' flash' : ''}`}>{objective}</div>
         <Rush />
         <Caravan />
-        <Banner />
+        <EventPill />
       </div>
       <div className="hud-right">
-        <div className="hud-buttons">
+        <div className="hud-buttons hud-interactive">
+          <PanelButton id="alerts" icon="🔔" badge={panel === 'alerts' ? 0 : unread} />
+          <PanelButton id="tasks" icon="🎯" badge={tasksReady} />
+          {stars > 0 && <PanelButton id="shop" icon="❄️" badge={free} />}
           <button
             className="hud-btn"
             onClick={() => {
@@ -254,12 +378,21 @@ export function HUD() {
             </button>
           )}
         </div>
-        <Clock />
+        {(panel === 'alerts' || panel === 'tasks') && (
+          <div className="hud-dropdown hud-interactive">
+            {panel === 'alerts' ? (
+              <Alerts />
+            ) : (
+              <>
+                <Furnace />
+                <Tasks />
+              </>
+            )}
+          </div>
+        )}
+        {panel !== 'alerts' && panel !== 'tasks' && <Clock />}
       </div>
-      <div className="hud-br">
-        <Furnace />
-        <Tasks />
-      </div>
+      {panel === 'shop' && <Shop />}
       <Offline />
       <Moving />
     </div>

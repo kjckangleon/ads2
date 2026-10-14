@@ -1,5 +1,5 @@
-// Floating virtual joystick for touch devices. Appears where the thumb
-// lands on the lower-left half of the screen.
+// Floating virtual joystick for touch devices. Appears wherever the thumb
+// lands — anywhere on screen except buttons and open panels.
 
 import { useEffect, useRef, useState } from 'react'
 import { input } from '../game/input'
@@ -17,8 +17,9 @@ export function Joystick() {
     const onDown = (e: TouchEvent) => {
       if (state.current.active) return
       const t = e.changedTouches[0]
-      // left 65% of screen, bottom 60% only
-      if (t.clientX > window.innerWidth * 0.65 || t.clientY < window.innerHeight * 0.4) return
+      // HUD buttons, dropdowns and popups keep their taps
+      const el = e.target as Element | null
+      if (el?.closest?.('button, .hud-interactive, .debug-panel')) return
       state.current = { active: true, id: t.identifier, bx: t.clientX, by: t.clientY }
       const base = baseRef.current!
       base.style.display = 'block'

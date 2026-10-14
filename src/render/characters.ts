@@ -473,6 +473,96 @@ export function bearBodyGeo(): THREE.BufferGeometry {
   return bearGeo
 }
 
+let mammothGeo: THREE.BufferGeometry | null = null
+let yetiGeo: THREE.BufferGeometry | null = null
+
+/** woolly mammoth: huge shaggy body, domed head, curled tusks, trunk */
+export function mammothBodyGeo(): THREE.BufferGeometry {
+  if (mammothGeo) return mammothGeo
+  const fur = '#6a4a32'
+  const dark = '#4e3424'
+  const ivory = '#efe6d2'
+  const parts: THREE.BufferGeometry[] = []
+  const body = new THREE.SphereGeometry(1.25, 14, 10)
+  body.scale(1.0, 0.95, 1.4)
+  body.translate(0, 2.0, -0.2)
+  parts.push(colorGeo(body, fur))
+  const hump = new THREE.SphereGeometry(0.95, 12, 8)
+  hump.translate(0, 2.75, 0.45)
+  parts.push(colorGeo(hump, dark))
+  const skirt = new THREE.CylinderGeometry(1.15, 1.35, 0.6, 12, 1, true)
+  skirt.scale(1, 1, 1.35)
+  skirt.translate(0, 1.25, -0.2)
+  parts.push(colorGeo(skirt, dark))
+  const head = new THREE.SphereGeometry(0.75, 12, 9)
+  head.translate(0, 2.45, 1.55)
+  parts.push(colorGeo(head, fur))
+  for (let i = 0; i < 4; i++) {
+    const seg = new THREE.CylinderGeometry(0.22 - i * 0.03, 0.25 - i * 0.03, 0.55, 8)
+    seg.rotateX(0.35 + i * 0.25)
+    seg.translate(0, 2.0 - i * 0.45, 2.05 + i * 0.12)
+    parts.push(colorGeo(seg, dark))
+  }
+  for (const s of [-1, 1]) {
+    const tusk = new THREE.TorusGeometry(0.7, 0.09, 6, 12, Math.PI * 0.85)
+    tusk.rotateY(Math.PI / 2)
+    tusk.rotateX(Math.PI)
+    tusk.translate(s * 0.42, 2.1, 2.15)
+    parts.push(colorGeo(tusk, ivory))
+    const ear = new THREE.SphereGeometry(0.3, 8, 6)
+    ear.scale(0.4, 1, 1)
+    ear.translate(s * 0.72, 2.6, 1.3)
+    parts.push(colorGeo(ear, dark))
+    const eye = new THREE.SphereGeometry(0.07, 6, 5)
+    eye.translate(s * 0.42, 2.65, 2.15)
+    parts.push(colorGeo(eye, '#1e1a16'))
+  }
+  mammothGeo = mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)))!
+  return mammothGeo
+}
+
+/** yeti: tall white snow beast, broad shoulders, long arms, blue face */
+export function yetiBodyGeo(): THREE.BufferGeometry {
+  if (yetiGeo) return yetiGeo
+  const fur = '#eef2f6'
+  const shade = '#c9d3de'
+  const face = '#6f8fb8'
+  const parts: THREE.BufferGeometry[] = []
+  const body = new THREE.CapsuleGeometry(0.75, 1.2, 6, 12)
+  body.scale(1.15, 1, 0.9)
+  body.translate(0, 2.1, 0)
+  parts.push(colorGeo(body, fur))
+  const chest = new THREE.SphereGeometry(0.7, 10, 8)
+  chest.scale(1.1, 0.8, 0.6)
+  chest.translate(0, 2.4, 0.35)
+  parts.push(colorGeo(chest, shade))
+  const head = new THREE.SphereGeometry(0.55, 12, 9)
+  head.translate(0, 3.45, 0.15)
+  parts.push(colorGeo(head, fur))
+  const mask = new THREE.SphereGeometry(0.36, 10, 8)
+  mask.scale(1, 0.85, 0.6)
+  mask.translate(0, 3.38, 0.52)
+  parts.push(colorGeo(mask, face))
+  for (const s of [-1, 1]) {
+    const arm = new THREE.CapsuleGeometry(0.26, 1.35, 4, 8)
+    arm.rotateZ(s * 0.25)
+    arm.translate(s * 1.05, 1.9, 0.15)
+    parts.push(colorGeo(arm, fur))
+    const fist = new THREE.SphereGeometry(0.32, 8, 6)
+    fist.translate(s * 1.25, 1.05, 0.2)
+    parts.push(colorGeo(fist, shade))
+    const eye = new THREE.SphereGeometry(0.07, 6, 5)
+    eye.translate(s * 0.14, 3.48, 0.78)
+    parts.push(colorGeo(eye, '#ff5a3a'))
+    const horn = new THREE.ConeGeometry(0.09, 0.4, 6)
+    horn.rotateZ(-s * 0.5)
+    horn.translate(s * 0.35, 3.95, 0.05)
+    parts.push(colorGeo(horn, '#9aa4b2'))
+  }
+  yetiGeo = mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)))!
+  return yetiGeo
+}
+
 const deerLegGeo = new THREE.CylinderGeometry(0.05, 0.045, 0.5, 6)
 deerLegGeo.translate(0, -0.25, 0)
 const deerLegMat = new THREE.MeshStandardMaterial({ color: '#6e523a', roughness: 0.9 })
@@ -486,12 +576,40 @@ const goatLegMat = new THREE.MeshStandardMaterial({ color: '#cfc8b8', roughness:
 const bearLegGeo = new THREE.CylinderGeometry(0.16, 0.14, 0.62, 7)
 bearLegGeo.translate(0, -0.31, 0)
 const bearLegMat = new THREE.MeshStandardMaterial({ color: '#3f2b1c', roughness: 0.95 })
+const mammothLegGeo = new THREE.CylinderGeometry(0.42, 0.38, 1.3, 8)
+mammothLegGeo.translate(0, -0.65, 0)
+const mammothLegMat = new THREE.MeshStandardMaterial({ color: '#4e3424', roughness: 0.95 })
+const yetiLegGeo = new THREE.CapsuleGeometry(0.3, 0.7, 4, 8)
+yetiLegGeo.translate(0, -0.6, 0)
+const yetiLegMat = new THREE.MeshStandardMaterial({ color: '#dfe6ee', roughness: 0.9 })
 
 /** body geometry, leg mesh + spots, leg hip height, shadow size per animal */
 const RIG: Record<
-  'deer' | 'rabbit' | 'goat' | 'bear',
+  'deer' | 'rabbit' | 'goat' | 'bear' | 'mammoth' | 'yeti',
   { body: () => THREE.BufferGeometry; leg?: [THREE.BufferGeometry, THREE.Material]; legs: number[][]; hip: number; shadow: number }
 > = {
+  mammoth: {
+    body: () => mammothBodyGeo(),
+    leg: [mammothLegGeo, mammothLegMat],
+    legs: [
+      [-0.65, 0.95],
+      [0.65, 0.95],
+      [-0.65, -1.1],
+      [0.65, -1.1],
+    ],
+    hip: 1.3,
+    shadow: 4.2,
+  },
+  yeti: {
+    body: () => yetiBodyGeo(),
+    leg: [yetiLegGeo, yetiLegMat],
+    legs: [
+      [-0.45, 0],
+      [0.45, 0],
+    ],
+    hip: 1.25,
+    shadow: 2.8,
+  },
   deer: {
     body: () => deerBodyGeo(),
     leg: [deerLegGeo, deerLegMat],
@@ -540,7 +658,7 @@ export interface AnimalRig {
   mouth?: THREE.Mesh
 }
 
-export function makeAnimalRig(kind: 'deer' | 'rabbit' | 'goat' | 'bear'): AnimalRig {
+export function makeAnimalRig(kind: 'deer' | 'rabbit' | 'goat' | 'bear' | 'mammoth' | 'yeti'): AnimalRig {
   const cfg = RIG[kind]
   const group = new THREE.Group()
   const mat = vertexColorMat.clone() // per-animal so hit flash can tint

@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { WORLD } from '../game/balance'
 import { mulberry32, randRange } from '../game/util'
 import { useUI } from '../game/uiStore'
+import { sim } from '../game/state'
 
 // ---------- snow ground ----------
 
@@ -424,11 +425,17 @@ function Snowfall({ count }: { count: number }) {
     const arr = attr.array as Float32Array
     const t = clock.elapsedTime
     const d = Math.min(dt, 0.05)
+    // a blizzard drives the snow down hard and sideways
+    const storm = sim.event?.id === 'blizzard'
+    const fall = storm ? 3.2 : 1
+    const wind = storm ? 7 : 0
     for (let i = 0; i < count; i++) {
-      let y = arr[i * 3 + 1] - data.speed[i] * d
+      let y = arr[i * 3 + 1] - data.speed[i] * d * fall
       if (y < 0) y = 19
       arr[i * 3 + 1] = y
-      arr[i * 3] += Math.sin(t * 0.7 + i) * 0.25 * d
+      let x = arr[i * 3] + Math.sin(t * 0.7 + i) * 0.25 * d + wind * d
+      if (x > 45) x -= 90
+      arr[i * 3] = x
     }
     attr.needsUpdate = true
   })

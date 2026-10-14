@@ -2,8 +2,10 @@
 // smoothed income rate, and "while you were away" earnings for time spent
 // with the game closed or in the background.
 
-import type { Sim } from '../types'
-import { OFFLINE, PRESTIGE, starsFor, offlineFrac } from '../balance'
+import type { Sim, PerkId } from '../types'
+import { OFFLINE, PRESTIGE, PERKS, starsFor, offlineFrac } from '../balance'
+import { perk } from '../perks'
+import { grantPad } from './economy'
 import { fmt } from '../format'
 import { sfx } from '../audio'
 import { createSim } from '../state'
@@ -41,10 +43,64 @@ export function moveSettlement(sim: Sim) {
   }
   next.money = PRESTIGE.startCashPerStar * next.meta.stars
   next.incomeRate = 0
+  applyStartPerks(next)
   saveNow(next)
   sim.moving = PRESTIGE.moveTime
   sim.movingStars = gained
   sfx.levelUp()
+}
+
+/** Head Start / Veteran Crew / Old Friends: what a fresh camp begins with */
+function applyStartPerks(next: Sim) {
+  const lvl = perk(next, 'startLevel')
+  if (lvl > 0) {
+    next.rep.level = 1 + lvl
+    next.rep.xp = 0
+  }
+  if (perk(next, 'headstart') > 0) {
+    grantPad(next, 'meatStall')
+    grantPad(next, 'tower')
+    // a stall that's already built shouldn't wait for "sell your first wood"
+    next.stats.woodServed = Math.max(next.stats.woodServed, 4)
+    next.stats.meatServed = Math.max(next.stats.meatServed, 1)
+  }
+  if (perk(next, 'crew') > 0 && perk(next, 'headstart') > 0) {
+    grantPad(next, 'lumberjack')
+    grantPad(next, 'cook')
+    grantPad(next, 'runner')
+  }
+  next.fx.length = 0
+  next.banners.length = 0
+  next.focus = null
+}
+
+/** unspent stars available in the shop */
+export function freeStars(sim: Sim) {
+  return sim.meta.stars - sim.meta.spent
+}
+
+export function perkCost(sim: Sim, id: PerkId): number | null {
+  const lvl = perk(sim, id)
+  const def = PERKS[id]
+  return lvl < def.costs.length ? def.costs[lvl] : null
+}
+
+export function canBuyPerk(sim: Sim, id: PerkId) {
+  const cost = perkCost(sim, id)
+  const req = PERKS[id].requires
+  return cost !== null && freeStars(sim) >= cost && (!req || perk(sim, req) > 0)
+}
+
+export function buyPerk(sim: Sim, id: PerkId) {
+  if (!canBuyPerk(sim, id)) return
+  const cost = perkCost(sim, id)!
+  sim.meta.spent += cost
+  sim.meta.perks = { ...sim.meta.perks, [id]: perk(sim, id) + 1 }
+  const p = sim.player.pos
+  sim.fx.push({ t: 'burst', x: p.x, y: 2.2, z: p.z, color: '#bfe6ff', n: 22, spread: 1.4, up: 4 })
+  banner(sim, `${PERKS[id].icon} ${PERKS[id].name} unlocked`, PERKS[id].desc, 'good')
+  sfx.levelUp()
+  saveNow(sim)
 }
 
 /** called every tick: income smoothing, time-away detection, the move countdown */
@@ -70,8 +126,9 @@ export function updateMeta(sim: Sim, dt: number) {
 }
 
 function grantOffline(sim: Sim, seconds: number) {
-  const capped = Math.min(seconds, OFFLINE.maxHours * 3600)
-  const amount = Math.floor(sim.incomeRate * capped * offlineFrac(sim.meta.stars))
+  const night = perk(sim, 'offline')
+  const capped = Math.min(seconds, (OFFLINE.maxHours + 4 * night) * 3600)
+  const amount = Math.floor(sim.incomeRate * capped * (offlineFrac(sim.meta.stars) + 0.1 * night))
   if (amount < 1) return
   // stack with an unclaimed payout rather than replacing it
   const prev = sim.offline

@@ -8,12 +8,12 @@ import { sim } from '../game/state'
 import { makeAnimalRig, makeWolfRig, makeBar, setBar, type AnimalRig, type Bar } from './characters'
 import type { AnimalKind } from '../game/types'
 
-const POOL: Record<AnimalKind, number> = { deer: 16, rabbit: 6, goat: 8, bear: 4 }
-const KINDS: AnimalKind[] = ['deer', 'rabbit', 'goat', 'bear']
+const POOL: Record<AnimalKind, number> = { deer: 16, rabbit: 6, goat: 8, bear: 4, mammoth: 1, yeti: 1 }
+const KINDS: AnimalKind[] = ['deer', 'rabbit', 'goat', 'bear', 'mammoth', 'yeti']
 const WOLF_POOL = 10
 /** big game gets a health bar so the long fight reads */
-const BAR_KINDS = new Set<AnimalKind>(['goat', 'bear'])
-const BAR_POOL = POOL.goat + POOL.bear
+const BAR_KINDS = new Set<AnimalKind>(['goat', 'bear', 'mammoth', 'yeti'])
+const BAR_POOL = POOL.goat + POOL.bear + POOL.mammoth + POOL.yeti
 
 export function AnimalsView() {
   const pool = useMemo(() => {
@@ -51,7 +51,7 @@ export function AnimalsView() {
   }, [])
 
   useFrame(() => {
-    const used: Record<AnimalKind, number> = { deer: 0, rabbit: 0, goat: 0, bear: 0 }
+    const used: Record<AnimalKind, number> = { deer: 0, rabbit: 0, goat: 0, bear: 0, mammoth: 0, yeti: 0 }
     let bi = 0
     for (const a of sim.animals) {
       const rig = pool.rigs[a.kind][used[a.kind]++]
@@ -64,23 +64,27 @@ export function AnimalsView() {
       if (a.kind === 'rabbit') {
         rig.body.position.y = moving ? Math.abs(Math.sin(a.walkPhase * 3)) * 0.22 : 0
       } else {
-        const gait = a.kind === 'bear' ? 1.8 : a.kind === 'goat' ? 2.8 : 2.4
-        const swing = a.kind === 'bear' ? 0.45 : 0.55
+        const heavy = a.kind === 'bear' || a.kind === 'mammoth' || a.kind === 'yeti'
+        const gait = heavy ? 1.6 : a.kind === 'goat' ? 2.8 : 2.4
+        const swing = heavy ? 0.4 : 0.55
         rig.legs.forEach((leg, k) => {
           leg.rotation.x = moving ? Math.sin(a.walkPhase * gait + (k % 2) * Math.PI) * swing : 0
         })
-        rig.body.position.y = moving ? Math.abs(Math.sin(a.walkPhase * gait)) * (a.kind === 'bear' ? 0.07 : 0.04) : 0
+        rig.body.position.y = moving ? Math.abs(Math.sin(a.walkPhase * gait)) * (heavy ? 0.09 : 0.04) : 0
         // graze when idle; a charging bear drops its head
         rig.body.rotation.x =
           a.state === 'charge' ? 0.12 : a.state === 'idle' ? Math.sin(sim.time * 0.8 + a.id) * 0.06 + 0.06 : 0
       }
-      const f = Math.max(0, a.hitFlash)
+      // bosses get hit constantly: a softer flash keeps their fur colour readable
+      const f = Math.max(0, a.hitFlash) * (a.kind === 'mammoth' || a.kind === 'yeti' ? 0.3 : 1)
       rig.mat.emissive.setRGB(f * 0.9, f * 0.3, f * 0.25)
 
       if (BAR_KINDS.has(a.kind) && a.hp < a.maxHp && bi < BAR_POOL) {
         const bar = pool.gameBars[bi++]
         bar.group.visible = true
-        bar.group.position.set(a.pos.x, a.kind === 'bear' ? 2.2 : 1.8, a.pos.z)
+        const barY = a.kind === 'mammoth' ? 4.6 : a.kind === 'yeti' ? 4.8 : a.kind === 'bear' ? 2.2 : 1.8
+        bar.group.position.set(a.pos.x, barY, a.pos.z)
+        bar.group.scale.setScalar(a.kind === 'mammoth' || a.kind === 'yeti' ? 2.2 : 1)
         setBar(bar, a.hp / a.maxHp)
       }
     }
@@ -99,6 +103,8 @@ export function AnimalsView() {
       rig.group.visible = true
       rig.group.position.set(w.pos.x, 0, w.pos.z)
       rig.group.rotation.y = w.yaw
+      // the siege alpha is a giant
+      rig.group.scale.setScalar(w.alpha ? 1.7 : 1)
       const running = w.state !== 'steal'
       // legs are [front-left, front-right, back-left, back-right]: trot diagonally
       rig.legs.forEach((leg, k) => {
@@ -113,7 +119,8 @@ export function AnimalsView() {
       rig.mat.emissive.setRGB(f * 0.9, f * 0.3, f * 0.25)
 
       bar.group.visible = w.hp < w.maxHp
-      bar.group.position.set(w.pos.x, 1.6, w.pos.z)
+      bar.group.position.set(w.pos.x, w.alpha ? 2.6 : 1.6, w.pos.z)
+      bar.group.scale.setScalar(w.alpha ? 1.8 : 1)
       setBar(bar, w.hp / w.maxHp)
     }
   })

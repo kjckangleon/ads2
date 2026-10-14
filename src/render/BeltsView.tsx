@@ -12,6 +12,7 @@ import { beltPoint } from '../game/systems/belts'
 import { makeCarryItem } from './characters'
 import { PopIn, Squash } from './anim'
 import { mergeStatic } from './rutil'
+import { beltPerkMult } from '../game/perks'
 
 const W = BELT.width
 const TOP = 0.22
@@ -185,7 +186,7 @@ function BeltView({ id }: { id: BeltId }) {
     v.root.scale.set(1, Math.max(s, 0.001), 1)
 
     // the surface scrolls at the real belt speed (items queue up on it when the stall is full)
-    v.tex.offset.y -= (beltSpeed(b.level) * Math.min(dt, 0.05)) / STRIPE
+    v.tex.offset.y -= (beltSpeed(b.level) * beltPerkMult(sim) * Math.min(dt, 0.05)) / STRIPE
 
     if (tmp.lastLevel !== b.level) {
       tmp.lastLevel = b.level

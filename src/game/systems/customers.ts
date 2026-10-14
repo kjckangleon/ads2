@@ -3,6 +3,8 @@ import { CUSTOMERS, WORLD, RUSH, REP, STATION_IDS, maxCustomers, maxDemand, furn
 import { seek, dist } from '../util'
 import { sfx } from '../audio'
 import { addXp, rushMult } from './progress'
+import { eventSpawnMult, eventPayMult, festivalOn } from './events'
+import { perk } from '../perks'
 
 export const VIP_VARIANT = 6
 const NORMAL_VARIANTS = 6
@@ -63,7 +65,7 @@ function spawnInterval(sim: Sim): number {
   if (sim.tower.built) score += 1
   score += sim.workers.length * 0.6
   const f = 1 + 0.12 * score + REP.spawnPerLevel * (sim.rep.level - 1)
-  return Math.max(CUSTOMERS.minInterval, CUSTOMERS.baseInterval / f)
+  return Math.max(CUSTOMERS.minInterval, CUSTOMERS.baseInterval / f) / eventSpawnMult(sim)
 }
 
 /** Weighted pick among unlocked stalls that still have room in line. */
@@ -94,7 +96,8 @@ function trySpawnCustomer(sim: Sim) {
   if (!id) return
   const st = sim.stations[id]
   const slot = backSlot(st)
-  const vip = sim.rep.level >= CUSTOMERS.vipMinLevel && Math.random() < CUSTOMERS.vipChance
+  const vipChance = CUSTOMERS.vipChance * (1 + 0.5 * perk(sim, 'vip'))
+  const vip = festivalOn(sim) || (sim.rep.level >= CUSTOMERS.vipMinLevel && Math.random() < vipChance)
   // higher levels: each survivor buys a bundle (VIPs always the biggest one)
   const most = maxDemand(sim.rep.level)
   const least = Math.ceil(most / 2)
@@ -153,14 +156,17 @@ function serve(sim: Sim, c: CustomerSim, st: StationSim) {
   const angry = c.starveT > CUSTOMERS.angryAfter
   // a lit furnace warms the whole market: every sale pays more
   const heat = sim.furnace.burning ? 1 + furnaceBonus(sim.furnace.level) : 1
-  const base = Math.round(st.price * c.want * (c.vip ? CUSTOMERS.vipMult : 1) * heat * starSalesMult(sim.meta.stars))
+  const base = Math.round(
+    st.price * c.want * (c.vip ? CUSTOMERS.vipMult : 1) * heat * starSalesMult(sim.meta.stars) * eventPayMult(sim),
+  )
   let pay = base
   if (tipped) {
     const r = sim.rush
     r.n++
     r.t = RUSH.window
     r.best = Math.max(r.best, r.n)
-    pay = Math.round((base + Math.ceil(base * RUSH.tipFrac)) * rushMult(r.n))
+    const tipFrac = RUSH.tipFrac * (1 + 0.25 * perk(sim, 'tips'))
+    pay = Math.round((base + Math.ceil(base * tipFrac)) * rushMult(r.n))
     sim.stats.tips++
   } else if (angry) {
     if (sim.rush.n >= RUSH.announceEvery) {

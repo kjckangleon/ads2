@@ -124,6 +124,20 @@ Once food runs itself, new pressure and new goals arrive in turn:
   your crew keeps earning: 40% of your recent income rate (+3% per Frost Star)
   for up to 8 hours, collected from a "While you were away" popup, with a free
   ×2 once a day.
+- **Frost Star shop.** The ❄️ button opens a shop: spend Frost Stars on
+  permanent perks (Head Start, Veteran Crew, Old Friends, Royal Favor,
+  Generous Folk, Greased Gears, Eagle Eye, Night Shift, Lucky Season, Trophy
+  Hunter). Spending never lowers the per-star bonuses.
+- **Random events** (Level 5+, every ~2–4 min): ❄️ Blizzard (double
+  customers who pay double), 🎪 Festival (everyone's a VIP), 💰 Gold Rush
+  (cash drops around camp — grab it before it melts), 🐺 Wolf Siege (a
+  daylight pack led by a giant alpha).
+- **Bosses** (Level 8+): a 🦣 Mammoth or ❄️ Yeti invades the meadow with
+  health sized to your tower, fights back, and drops a treasure chest when the
+  tower, guards and you bring it down within 2 minutes.
+- **Quiet HUD.** Alerts go to the 🔔 dropdown (badge = unread) instead of
+  popping up; the task board and furnace status live in the 🎯 dropdown. On
+  phones the joystick starts wherever you touch.
 - **Prerequisites.** Locked pads say what they need ("Needs Food Runner 1/2 ·
   Cook"). The Ice Fishery needs a full Tannery crew, the Coal Mine a full
   Fishery crew.

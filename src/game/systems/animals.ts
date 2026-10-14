@@ -1,5 +1,6 @@
-import type { Sim, AnimalSim, AnimalKind, V2, TreeSim } from '../types'
-import { ANIMALS, WORLD, deerTarget, bigGameTarget, animalRespawn } from '../balance'
+import type { Sim, AnimalSim, AnimalKind, BossKind, V2, TreeSim } from '../types'
+import { ANIMALS, BOSS, WORLD, deerTarget, bigGameTarget, animalRespawn } from '../balance'
+import { bossDown } from './events'
 import { seek, dist, clamp } from '../util'
 import { spawnAnimal } from '../state'
 import { sfx } from '../audio'
@@ -28,7 +29,14 @@ const LOOT: Record<AnimalKind, { meat: number; hides: number; spread: number }> 
   deer: { meat: ANIMALS.deerDrops, hides: 1, spread: 1.2 },
   goat: { meat: ANIMALS.goat.drops, hides: ANIMALS.goat.hides, spread: 1.4 },
   bear: { meat: ANIMALS.bear.drops, hides: ANIMALS.bear.hides, spread: 2.0 },
+  mammoth: { meat: BOSS.mammoth.drops, hides: BOSS.mammoth.hides, spread: 3.0 },
+  yeti: { meat: BOSS.yeti.drops, hides: BOSS.yeti.hides, spread: 2.6 },
 }
+
+export const isBoss = (k: AnimalKind): k is BossKind => k === 'mammoth' || k === 'yeti'
+/** bears and bosses fight back instead of running */
+const fighter = (k: AnimalKind) => k === 'bear' || isBoss(k)
+const chargeSpeed = (k: AnimalKind) => (isBoss(k) ? BOSS[k].charge : ANIMALS.bear.charge)
 
 export function killAnimal(sim: Sim, a: AnimalSim) {
   const idx = sim.animals.indexOf(a)
@@ -43,8 +51,9 @@ export function killAnimal(sim: Sim, a: AnimalSim) {
   }
   sim.stats.kills++
   if (a.kind === 'bear') sim.stats.bearKills++
+  if (isBoss(a.kind)) bossDown(sim, a)
   sfx.kill()
-  const big = a.kind === 'bear' || a.kind === 'goat'
+  const big = a.kind === 'bear' || a.kind === 'goat' || isBoss(a.kind)
   sim.fx.push({ t: 'burst', x: a.pos.x, y: 0.8, z: a.pos.z, color: '#e06a5a', n: big ? 22 : 10, spread: big ? 1.6 : 0.9 })
   sim.fx.push({
     t: 'text',
@@ -65,10 +74,11 @@ export function killAnimal(sim: Sim, a: AnimalSim) {
 export function hurtAnimal(sim: Sim, a: AnimalSim, dmg: number, byTower: boolean) {
   a.hp -= dmg
   a.hitFlash = 1
-  if (a.kind === 'bear') {
-    if (dist(a.pos, sim.player.pos) < ANIMALS.bearAggro) {
+  if (fighter(a.kind)) {
+    if (dist(a.pos, sim.player.pos) < ANIMALS.bearAggro * (isBoss(a.kind) ? 1.6 : 1)) {
       if (a.state !== 'charge') {
-        sim.fx.push({ t: 'text', x: a.pos.x, y: 2.6, z: a.pos.z, str: '🐻 GRRR!', color: '#ff9a6a', size: 1 })
+        const roar = a.kind === 'mammoth' ? '🦣 HRRUUMPH!' : a.kind === 'yeti' ? '❄️ RAAWR!' : '🐻 GRRR!'
+        sim.fx.push({ t: 'text', x: a.pos.x, y: isBoss(a.kind) ? 4 : 2.6, z: a.pos.z, str: roar, color: '#ff9a6a', size: 1 })
       }
       a.state = 'charge'
       a.t = ANIMALS.bearChaseTime
@@ -77,7 +87,7 @@ export function hurtAnimal(sim: Sim, a: AnimalSim, dmg: number, byTower: boolean
     a.state = 'flee'
     a.t = ANIMALS.fleeTime * (byTower ? 0.7 : 1)
   }
-  const y = a.kind === 'bear' ? 2.3 : 1.6
+  const y = isBoss(a.kind) ? 4.2 : a.kind === 'bear' ? 2.3 : 1.6
   if (byTower) {
     sfx.hit()
     sim.fx.push({ t: 'text', x: a.pos.x, y, z: a.pos.z, str: `-${dmg}`, color: '#ffcf5e', size: 0.75 })
@@ -93,12 +103,16 @@ const WALK: Record<AnimalKind, number> = {
   rabbit: ANIMALS.rabbitWalk,
   goat: ANIMALS.goat.walk,
   bear: ANIMALS.bear.walk,
+  mammoth: BOSS.mammoth.walk,
+  yeti: BOSS.yeti.walk,
 }
 const FLEE: Record<AnimalKind, number> = {
   deer: ANIMALS.deerFlee,
   rabbit: ANIMALS.rabbitFlee,
   goat: ANIMALS.goat.flee,
   bear: ANIMALS.bear.walk,
+  mammoth: BOSS.mammoth.walk,
+  yeti: BOSS.yeti.walk,
 }
 
 function regrow(nodes: TreeSim[], dt: number) {
@@ -118,8 +132,9 @@ function bearSwipe(sim: Sim, a: AnimalSim) {
   const dx = p.pos.x - a.pos.x
   const dz = p.pos.z - a.pos.z
   const d = Math.hypot(dx, dz) || 1
-  p.pos.x += (dx / d) * ANIMALS.bearKnockback
-  p.pos.z += (dz / d) * ANIMALS.bearKnockback
+  const k = isBoss(a.kind) ? BOSS[a.kind].knockback : ANIMALS.bearKnockback
+  p.pos.x += (dx / d) * k
+  p.pos.z += (dz / d) * k
   sim.fx.push({ t: 'shake', power: 0.45 })
   sim.fx.push({ t: 'burst', x: p.pos.x, y: 1.0, z: p.pos.z, color: '#f4f8ff', n: 12, spread: 0.9, up: 2 })
   sim.fx.push({ t: 'text', x: p.pos.x, y: 2.6, z: p.pos.z, str: '💥 SWIPE!', color: '#ff9a6a', size: 1 })
@@ -146,7 +161,7 @@ export function updateAnimals(sim: Sim, dt: number) {
 
     // player proximity triggers flee (bears stand their ground)
     const dp = dist(a.pos, p.pos)
-    if (a.kind !== 'bear' && dp < ANIMALS.fleeTrigger && a.state !== 'flee') {
+    if (!fighter(a.kind) && dp < ANIMALS.fleeTrigger && a.state !== 'flee') {
       a.state = 'flee'
       a.t = ANIMALS.fleeTime
     }
@@ -154,10 +169,11 @@ export function updateAnimals(sim: Sim, dt: number) {
     switch (a.state) {
       case 'charge': {
         a.t -= dt
-        a.walkPhase += dt * ANIMALS.bear.charge * 2.2
-        if (dp > ANIMALS.bearReach) seek(a, p.pos, ANIMALS.bear.charge, dt, ANIMALS.bearReach * 0.9)
+        const reach = ANIMALS.bearReach * (isBoss(a.kind) ? 1.8 : 1)
+        a.walkPhase += dt * chargeSpeed(a.kind) * 2.2
+        if (dp > reach) seek(a, p.pos, chargeSpeed(a.kind), dt, reach * 0.9)
         else if (a.atkT <= 0) bearSwipe(sim, a)
-        if (a.t <= 0 || dp > ANIMALS.bearAggro * 1.5) {
+        if (a.t <= 0 || dp > ANIMALS.bearAggro * (isBoss(a.kind) ? 2.4 : 1.5)) {
           a.state = 'idle'
           a.t = 1 + Math.random()
         }
@@ -216,13 +232,16 @@ export function updateAnimals(sim: Sim, dt: number) {
 
   // respawn to keep the population up (Wild Game upgrades and settlement level raise it)
   const lvl = sim.rep.level
-  const counts: Record<AnimalKind, number> = { deer: 0, rabbit: 0, goat: 0, bear: 0 }
+  const counts: Record<AnimalKind, number> = { deer: 0, rabbit: 0, goat: 0, bear: 0, mammoth: 0, yeti: 0 }
   for (const a of sim.animals) counts[a.kind]++
   const want: Record<AnimalKind, number> = {
     deer: deerTarget(sim.game.lvl, lvl),
     goat: bigGameTarget('goat', lvl),
     bear: bigGameTarget('bear', lvl),
     rabbit: ANIMALS.rabbitCount,
+    // bosses only arrive with their event
+    mammoth: 0,
+    yeti: 0,
   }
   // refill whichever kind is furthest below its target, so big game shows up even
   // while the tower keeps thinning the deer

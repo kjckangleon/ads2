@@ -13,6 +13,7 @@ import { billGeo, billMat } from './PilesView'
 import { frameMat, railMats, legMat, stripeCanvas } from './BeltsView'
 import { PopIn } from './anim'
 import { mergeStatic } from './rutil'
+import { beltPerkMult } from '../game/perks'
 
 const H = CASH_BELT.height
 const W = 0.62
@@ -174,7 +175,7 @@ function CashBeltView({ id }: { id: StationId }) {
     v.root.visible = s > 0.01
     if (!on) return
     v.root.scale.set(1, Math.max(s, 0.001), 1)
-    v.tex.offset.y -= (beltSpeed(cash.level) * 1.2 * Math.min(dt, 0.05)) / STRIPE
+    v.tex.offset.y -= (beltSpeed(cash.level) * 1.2 * beltPerkMult(sim) * Math.min(dt, 0.05)) / STRIPE
     if (tmp.lvl !== cash.level) {
       tmp.lvl = cash.level
       for (const r of v.rails) r.material = railMats[Math.min(railMats.length - 1, cash.level - 1)]

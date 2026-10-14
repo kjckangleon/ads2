@@ -295,6 +295,17 @@ function buildBelt(sim: Sim, id: PadBeltId, level: number) {
   sfx.build()
 }
 
+/** buy a pad level for free (start perks, tests) — same effect as paying for it */
+export function grantPad(sim: Sim, id: string) {
+  const pad = sim.pads.find((p) => p.id === id)
+  if (!pad || pad.done) return
+  const def = PAD_BY_ID[id]
+  pad.level++
+  pad.done = pad.level >= def.maxLevel
+  if (!pad.done) pad.cost = padCost(def, pad.level)
+  applyPad(sim, pad)
+}
+
 export function applyPad(sim: Sim, pad: PadSim) {
   switch (pad.id) {
     case 'meatStall': {
@@ -472,7 +483,8 @@ export function updateEconomy(sim: Sim, dt: number) {
     pad.needLevel = pad.locked && !pad.lockText ? pad.level + 1 - REP.upgradeCapBase : 0
     pad.pulse += dt
 
-    const onPad = dist(p.pos, pad.pos) < pad.radius
+    // mid-fight (swinging at a wolf or boss) you're not shopping: no accidental upgrade runs
+    const onPad = dist(p.pos, pad.pos) < pad.radius && p.swing <= 0
     if (!onPad) {
       pad.hold = 0
       pad.streak = 0

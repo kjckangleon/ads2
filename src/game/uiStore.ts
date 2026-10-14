@@ -24,6 +24,17 @@ export interface TaskView {
   done: boolean
 }
 
+export interface NoticeView {
+  id: number
+  text: string
+  sub: string
+  tone: string
+  ago: string
+}
+
+/** which HUD dropdown / panel is open ('' = none) */
+export type Panel = '' | 'alerts' | 'tasks' | 'shop'
+
 export interface UIState {
   money: number
   objectiveText: string
@@ -48,7 +59,22 @@ export interface UIState {
   bannerSub: string
   bannerTone: string
   stars: number
+  freeStars: number
   starBonus: number
+  notices: NoticeView[]
+  noticesKey: string
+  latestNotice: number
+  seenNotice: number
+  panel: Panel
+  /** the running event (empty when none) */
+  eventIcon: string
+  eventName: string
+  eventFrac: number
+  eventLeft: number
+  /** boss health bar (empty when no boss) */
+  bossName: string
+  bossFrac: number
+  bossHp: string
   /** Frost Stars a move would earn right now (0 before the mine) */
   pendingStars: number
   offlineAmount: number
@@ -92,7 +118,20 @@ export const useUI = create<UIState>((set) => ({
   bannerSub: '',
   bannerTone: 'info',
   stars: 0,
+  freeStars: 0,
   starBonus: 0,
+  notices: [],
+  noticesKey: '',
+  latestNotice: 0,
+  seenNotice: 0,
+  panel: '',
+  eventIcon: '',
+  eventName: '',
+  eventFrac: 0,
+  eventLeft: 0,
+  bossName: '',
+  bossFrac: 0,
+  bossHp: '',
   pendingStars: 0,
   offlineAmount: 0,
   offlineSeconds: 0,

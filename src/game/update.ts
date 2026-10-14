@@ -1,5 +1,5 @@
-import type { Sim } from './types'
-import { ECONOMY, CLOCK, RUSH, xpForLevel, furnaceBonus } from './balance'
+import type { Sim, BossKind } from './types'
+import { ECONOMY, CLOCK, RUSH, EVENT_INFO, BOSS, xpForLevel, furnaceBonus } from './balance'
 import { updateClock } from './systems/clock'
 import { updateCustomers } from './systems/customers'
 import { updatePlayer } from './systems/player'
@@ -12,6 +12,7 @@ import { updateBelts } from './systems/belts'
 import { updateMeta, pendingStars, canDoubleOffline } from './systems/meta'
 import { starSalesMult } from './balance'
 import { updateTasks, taskProgress, taskText } from './systems/tasks'
+import { updateEvents } from './systems/events'
 import { fmt } from './format'
 import { updateCaravan, orderText } from './systems/caravan'
 import { updateEconomy } from './systems/economy'
@@ -26,6 +27,28 @@ const MAX_PENDING_FX = 300
 let uiSyncT = 0
 
 const q = (v: number, steps: number) => Math.round(v * steps) / steps
+
+function ago(sec: number) {
+  if (sec < 60) return 'just now'
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
+  return `${Math.floor(sec / 3600)}h ago`
+}
+
+/** running event + boss bar for the HUD */
+function eventView(sim: Sim) {
+  const ev = sim.event
+  const boss = ev?.id === 'boss' ? sim.animals.find((a) => a.id === ev.bossId) : undefined
+  const info = ev ? EVENT_INFO[ev.id] : null
+  return {
+    eventIcon: info && ev ? (boss ? BOSS[boss.kind as BossKind].icon : info.icon) : '',
+    eventName: info && ev ? (boss ? BOSS[boss.kind as BossKind].label : info.name.replace('!', '')) : '',
+    eventFrac: ev ? q(ev.t / ev.dur, 50) : 0,
+    eventLeft: ev ? Math.ceil(ev.t) : 0,
+    bossName: boss ? BOSS[boss.kind as BossKind].label : '',
+    bossFrac: boss ? q(boss.hp / boss.maxHp, 100) : 0,
+    bossHp: boss ? `${fmt(Math.max(0, boss.hp))} / ${fmt(boss.maxHp)}` : '',
+  }
+}
 
 function syncUI(sim: Sim) {
   const cv = sim.caravan
@@ -54,6 +77,9 @@ function syncUI(sim: Sim) {
     bannerSub: sim.banner.sub,
     bannerTone: sim.banner.tone,
     stars: sim.meta.stars,
+    freeStars: sim.meta.stars - sim.meta.spent,
+    latestNotice: sim.notices.length ? sim.notices[sim.notices.length - 1].id : 0,
+    ...eventView(sim),
     starBonus: Math.round((starSalesMult(sim.meta.stars) - 1) * 100),
     pendingStars: sim.zones.mine ? pendingStars(sim) : 0,
     offlineAmount: sim.offline?.amount ?? 0,
@@ -77,6 +103,15 @@ function syncUI(sim: Sim) {
       done: t.doneT >= 0,
     }
   })
+  // alert history: re-send when a new one arrives or every ~10 s so "2m ago" stays fresh
+  const noticesKey = `${sim.notices.length ? sim.notices[sim.notices.length - 1].id : 0}:${Math.floor(sim.time / 10)}`
+  if (noticesKey !== useUI.getState().noticesKey) {
+    next.noticesKey = noticesKey
+    next.notices = sim.notices
+      .slice()
+      .reverse()
+      .map((n) => ({ id: n.id, text: n.text, sub: n.sub, tone: n.tone, ago: ago(sim.time - n.at) }))
+  }
   const tasksKey = tasks.map((t) => `${t.id}:${t.progress}:${t.done}`).join('|')
   if (tasksKey !== useUI.getState().tasksKey) {
     next.tasks = tasks
@@ -117,6 +152,7 @@ export function tick(sim: Sim, dt: number) {
   updateRush(sim, dt)
   updateObjectives(sim, dt)
   updateTasks(sim, dt)
+  updateEvents(sim, dt)
   updateBanners(sim, dt)
 
   if (sim.focus) {

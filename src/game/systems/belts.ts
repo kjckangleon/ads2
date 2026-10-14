@@ -24,6 +24,7 @@ import {
   starSalesMult,
 } from '../balance'
 import { dist, lerpAngle, damp } from '../util'
+import { beltPerkMult } from '../perks'
 import { CASH_LIFT } from '../state'
 import { fmt } from '../format'
 import { sfx } from '../audio'
@@ -151,7 +152,7 @@ function updateBelt(sim: Sim, id: BeltId, dt: number) {
   if (b.level <= 0) return
   if (b.pulse > 0) b.pulse -= dt
   const { src, sink } = beltEnds(sim, id)
-  const speed = beltSpeed(b.level)
+  const speed = beltSpeed(b.level) * beltPerkMult(sim)
   const items = b.items
 
   // front item: deliver when it reaches the end and the sink has room
@@ -224,7 +225,7 @@ export function cashPoint(b: CashBeltSim, d: number, out: { x: number; y: number
 function updateCashBelts(sim: Sim, dt: number) {
   const cash = sim.cash
   if (cash.level <= 0) return
-  const speed = beltSpeed(cash.level) * 1.2
+  const speed = beltSpeed(cash.level) * 1.2 * beltPerkMult(sim)
   const chest = sim.chest.pos
 
   for (const id of STATION_IDS) {
@@ -316,7 +317,7 @@ function updateGatherMachine(sim: Sim, m: MachineSim, dt: number) {
   m.spin += dt
   m.yaw = lerpAngle(m.yaw, Math.atan2(node.pos.x - m.pos.x, node.pos.z - m.pos.z), damp(6, dt))
   m.workT += dt
-  if (m.workT < machineWorkTime(m.id, m.level)) return
+  if (m.workT < machineWorkTime(m.id, m.level) / beltPerkMult(sim)) return
   m.workT = 0
   node.wood--
   node.shake = 1
@@ -345,11 +346,19 @@ function updateSkinner(sim: Sim, m: MachineSim, dt: number) {
   m.active = true
   m.spin += dt
   m.workT += dt
-  if (m.workT < machineWorkTime(m.id, m.level)) return
+  if (m.workT < machineWorkTime(m.id, m.level) / beltPerkMult(sim)) return
   m.workT = 0
   const d = sim.drops[near]
   sim.drops.splice(near, 1)
   m.buf[d.kind] = (m.buf[d.kind] ?? 0) + 1
+  // it skins the carcass too: meat comes with a share of a hide (coats need lots of them)
+  if (d.kind === 'raw' && sim.proc.tailor.unlocked && room('hide')) {
+    m.skin += MACHINE.hidePerMeat[Math.min(MACHINE.hidePerMeat.length, m.level) - 1]
+    while (m.skin >= 1 && room('hide')) {
+      m.skin -= 1
+      m.buf.hide = (m.buf.hide ?? 0) + 1
+    }
+  }
   sim.fx.push({ t: 'itemfly', kind: d.kind, from: { x: d.pos.x, y: 0.3, z: d.pos.z }, to: { x: m.pos.x, y: 1.6, z: m.pos.z } })
 }
 

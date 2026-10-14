@@ -10,7 +10,7 @@ import { fmt } from '../format'
 import { seek, dist, lerpAngle, damp } from '../util'
 import { sfx } from '../audio'
 import { damageWolf } from './wolves'
-import { dropItem } from './animals'
+import { dropItem, hurtAnimal, isBoss } from './animals'
 import {
   type Source,
   type Sink,
@@ -486,6 +486,26 @@ function updateGuard(sim: Sim, w: WorkerSim, dt: number) {
         w.atkT = GUARD.attackTime
         w.swing = 0.25
         damageWolf(sim, target, guardDamage(sim.rep.level))
+      }
+    }
+    return
+  }
+
+  // no wolves about: help bring down a boss in the meadow
+  const boss = sim.animals.find((a) => isBoss(a.kind) && dist(a.pos, w.post) < GUARD.thiefRange)
+  if (boss) {
+    w.mode = 'chase'
+    w.targetId = boss.id
+    w.activity = 'fighting the boss!'
+    const reach = GUARD.range + 1.2
+    if (dist(boss.pos, w.pos) > reach) walk(sim, w, boss.pos, dt, reach * 0.8, GUARD.speedMult)
+    else {
+      w.yaw = lerpAngle(w.yaw, Math.atan2(boss.pos.x - w.pos.x, boss.pos.z - w.pos.z), damp(12, dt))
+      w.atkT -= dt
+      if (w.atkT <= 0) {
+        w.atkT = GUARD.attackTime
+        w.swing = 0.25
+        hurtAnimal(sim, boss, guardDamage(sim.rep.level) * 3, true)
       }
     }
     return

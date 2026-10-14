@@ -3,7 +3,7 @@
 // Killing one drops whatever it was carrying, a hide, and a coin bounty.
 
 import type { Sim, WolfSim, WolfTarget, V2 } from '../types'
-import { WOLVES, ANIMALS, REP, WORLD, wolfHp } from '../balance'
+import { WOLVES, ANIMALS, REP, WORLD, EVENTS, wolfHp } from '../balance'
 import { dist, seek } from '../util'
 import { sfx } from '../audio'
 import { addXp, banner } from './progress'
@@ -28,6 +28,8 @@ export function spawnWolf(sim: Sim) {
     hitFlash: 0,
     walkPhase: Math.random() * 6,
     exit: { x: sp.x, z: sp.z },
+    siege: false,
+    alpha: false,
   }
   pickTarget(sim, w)
   sim.wolves.push(w)
@@ -136,7 +138,7 @@ export function killWolf(sim: Sim, w: WolfSim) {
     dropItem(sim, 'hide', w.pos, 0.8)
   }
   // bounty flies to the nearest coin pile
-  const bounty = WOLVES.bounty + WOLVES.bountyPerRaid * sim.raid.count
+  const bounty = (WOLVES.bounty + WOLVES.bountyPerRaid * sim.raid.count) * (w.alpha ? EVENTS.alphaBountyMult : 1)
   let pile = sim.piles[0]
   let best = Infinity
   for (const p of sim.piles) {
@@ -160,15 +162,16 @@ export function killWolf(sim: Sim, w: WolfSim) {
   addXp(sim, REP.xpWolf)
   sfx.wolfKill()
   sim.fx.push({ t: 'burst', x: w.pos.x, y: 0.8, z: w.pos.z, color: '#9aa1ad', n: 14, spread: 1 })
-  sim.fx.push({ t: 'text', x: w.pos.x, y: 2.0, z: w.pos.z, str: `🐺 +$${bounty}`, color: '#ffd75e', size: 1 })
+  sim.fx.push({ t: 'text', x: w.pos.x, y: 2.0, z: w.pos.z, str: `${w.alpha ? '🐺 ALPHA DOWN ' : '🐺 '}+$${bounty}`, color: '#ffd75e', size: w.alpha ? 1.3 : 1 })
+  if (w.alpha) sim.fx.push({ t: 'shake', power: 0.4 })
 }
 
 export function updateWolves(sim: Sim, dt: number) {
   for (let i = sim.wolves.length - 1; i >= 0; i--) {
     const w = sim.wolves[i]
     if (w.hitFlash > 0) w.hitFlash -= dt * 4
-    // the pack scatters at dawn
-    if (!sim.clock.night && w.state !== 'flee') w.state = 'flee'
+    // the pack scatters at dawn (a siege pack keeps coming until its event ends)
+    if (!sim.clock.night && !w.siege && w.state !== 'flee') w.state = 'flee'
 
     switch (w.state) {
       case 'approach': {

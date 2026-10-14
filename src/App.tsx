@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Analytics } from '@vercel/analytics/react'
 import { Game } from './game/Game'
 import { HUD } from './ui/HUD'
 import { Joystick } from './ui/Joystick'
@@ -22,6 +23,7 @@ export function App() {
       <HUD />
       <Joystick />
       {import.meta.env.DEV && <DebugPanel />}
+      <Analytics />
     </div>
   )
 }

@@ -11,7 +11,16 @@ import { requestSave } from '../saveFlag'
 const BANNER_TIME = 2.2
 let bannerSeq = 0
 
+let noticeSeq = 0
+const MAX_NOTICES = 30
+
 export function banner(sim: Sim, text: string, sub = '', tone: BannerTone = 'info') {
+  // every alert lands in the 🔔 history (no pop-ups over the play area)
+  const last = sim.notices[sim.notices.length - 1]
+  if (!last || last.text !== text || sim.time - last.at > 3) {
+    sim.notices.push({ id: ++noticeSeq, text, sub, tone, at: sim.time })
+    if (sim.notices.length > MAX_NOTICES) sim.notices.shift()
+  }
   if (sim.banners.some((b) => b.text === text)) return
   sim.banners.push({ text, sub, tone, id: 0 })
   if (sim.banners.length > 4) sim.banners.shift()

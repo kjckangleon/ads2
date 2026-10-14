@@ -124,7 +124,26 @@ export interface TreeSim {
   scale: number
 }
 
-export type AnimalKind = 'deer' | 'rabbit' | 'goat' | 'bear'
+export type AnimalKind = 'deer' | 'rabbit' | 'goat' | 'bear' | 'mammoth' | 'yeti'
+
+/** the two boss animals */
+export type BossKind = 'mammoth' | 'yeti'
+
+/** random events that shake up the late game */
+export type EventId = 'blizzard' | 'festival' | 'goldRush' | 'siege' | 'boss'
+
+/** Frost Star shop perks (bought with unspent stars, kept forever) */
+export type PerkId =
+  | 'headstart'
+  | 'crew'
+  | 'startLevel'
+  | 'vip'
+  | 'tips'
+  | 'belts'
+  | 'arrows'
+  | 'offline'
+  | 'events'
+  | 'bossLoot'
 
 export interface AnimalSim {
   id: number
@@ -162,6 +181,31 @@ export interface WolfSim {
   hitFlash: number
   walkPhase: number
   exit: V2
+  /** siege wolves raid in daylight; the alpha is the big one */
+  siege: boolean
+  alpha: boolean
+}
+
+/** something on the ground the player grabs by walking over it */
+export interface LootSim {
+  id: number
+  kind: 'cash' | 'chest'
+  pos: V2
+  value: number
+  age: number
+  /** seconds before it melts away */
+  ttl: number
+}
+
+export interface EventSim {
+  id: EventId
+  /** seconds left */
+  t: number
+  dur: number
+  /** boss events: the animal's id */
+  bossId: number
+  /** gold rush: cash bundles grabbed so far */
+  grabbed: number
 }
 
 export interface DropSim {
@@ -353,6 +397,15 @@ export interface Guide {
 
 export type BannerTone = 'good' | 'warn' | 'info'
 
+export interface Notice {
+  id: number
+  text: string
+  sub: string
+  tone: BannerTone
+  /** sim.time when it happened */
+  at: number
+}
+
 export interface Banner {
   text: string
   sub: string
@@ -424,6 +477,8 @@ export interface MachineSim {
   /** animates the saw / drill / gears (seconds of activity) */
   spin: number
   active: boolean
+  /** skinner: fractional hide skinned from meat so far */
+  skin: number
 }
 
 /** Coal burns here; while lit, every stall sale pays a bonus. */
@@ -463,9 +518,17 @@ export interface MetaSim {
   bestLevel: number
   /** local date (YYYY-MM-DD) the free ×2 offline claim was last used */
   doubleDay: string
+  /** stars spent in the shop (bonuses still count every star ever earned) */
+  spent: number
+  perks: Partial<Record<PerkId, number>>
 }
 
-export interface Stats {
+export interface StatsExtra {
+  bossesKilled: number
+  eventsSeen: number
+}
+
+export interface Stats extends StatsExtra {
   served: number
   woodServed: number
   meatServed: number
@@ -541,6 +604,8 @@ export interface Sim {
   /** ground arrows around the player pointing at what matters right now */
   guides: Guide[]
   tasks: TaskSim[]
+  /** alert history for the 🔔 dropdown (newest last) */
+  notices: Notice[]
   banners: Banner[]
   banner: Banner
   bannerT: number
@@ -554,6 +619,10 @@ export interface Sim {
   lastWall: number
   /** "while you were away" payout waiting to be claimed */
   offline: { amount: number; seconds: number } | null
+  /** the running random event (null between events) and the countdown to the next */
+  event: EventSim | null
+  eventNext: number
+  loot: LootSim[]
   /** > 0 while packing up for a new settlement (seconds left before the reload) */
   moving: number
   movingStars: number
