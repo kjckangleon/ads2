@@ -117,11 +117,14 @@ export function updateMeta(sim: Sim, dt: number) {
   // a long gap between ticks = the game was closed or in the background
   if (typeof Date !== 'undefined') {
     const now = Date.now()
+    let credited = false
     if (sim.lastWall > 0) {
       const away = (now - sim.lastWall) / 1000
-      if (away >= OFFLINE.minSeconds) grantOffline(sim, away)
+      if (away >= OFFLINE.minSeconds) credited = grantOffline(sim, away)
     }
     sim.lastWall = now
+    // Persist the payout and its time boundary together, before another reload.
+    if (credited) saveNow(sim)
   }
 }
 
@@ -129,10 +132,11 @@ function grantOffline(sim: Sim, seconds: number) {
   const night = perk(sim, 'offline')
   const capped = Math.min(seconds, (OFFLINE.maxHours + 4 * night) * 3600)
   const amount = Math.floor(sim.incomeRate * capped * (offlineFrac(sim.meta.stars) + 0.1 * night))
-  if (amount < 1) return
+  if (amount < 1) return false
   // stack with an unclaimed payout rather than replacing it
   const prev = sim.offline
   sim.offline = { amount: amount + (prev?.amount ?? 0), seconds: capped + (prev?.seconds ?? 0) }
+  return true
 }
 
 export function claimOffline(sim: Sim, double: boolean) {
@@ -143,6 +147,8 @@ export function claimOffline(sim: Sim, double: boolean) {
   const amount = o.amount * mult
   sim.money += amount
   sim.offline = null
+  // A refresh immediately after claiming must not lose or repeat the reward.
+  saveNow(sim)
   const p = sim.player.pos
   for (let i = 0; i < 8; i++)
     sim.fx.push({ t: 'coin', x: p.x + (Math.random() - 0.5) * 1.5, y: 2.4, z: p.z + (Math.random() - 0.5) * 1.5 })

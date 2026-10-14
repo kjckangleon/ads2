@@ -15,6 +15,8 @@ npm install
 npm run dev        # dev server (has debug panel + window.__ff fast-forward)
 npm run build      # production build (debug excluded)
 npm run preview    # serve the production build
+npm run typecheck  # check TypeScript
+npm test           # save / offline-earnings regression tests
 ```
 
 **Always the latest build on phones.** Every build writes `dist/version.json`
@@ -220,7 +222,9 @@ raiding wolf (red), a waiting caravan (teal) and where your load goes (blue).
 - **Balance** (`src/game/balance.ts`): every tuning number in one file,
   including derived-stat helpers shared by upgrades and the save loader.
 - **Save** (`src/game/save.ts`): LocalStorage, autosave every 5 s + on purchase.
-  Format v2; v1 saves migrate automatically (lifetime serves → settlement XP).
+  Format v3; v1/v2 saves migrate automatically (XP and economy scaling).
+  The player's backpack and unclaimed offline earnings survive a refresh;
+  claiming a reward immediately saves its cash and daily-double status.
 - Physics: intentionally none (proximity checks, circle and box push-out),
   which is cheaper on phones than Rapier for this design; Rapier can be added
   later for ragdolls.
