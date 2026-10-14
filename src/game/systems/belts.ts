@@ -3,17 +3,31 @@
 // the far end. A full stall backs the line up, so a stalled belt reads as a
 // bottleneck at a glance. The furnace burns coal here too.
 
-import type { Sim, BeltId, WorkerRole, CashBeltSim, PileId, MachineId, MachineSim, ResKind, TreeSim, ProcessorId } from '../types'
+import type {
+  Sim,
+  BeltId,
+  WorkerRole,
+  CashBeltSim,
+  CashBeltId,
+  StationId,
+  MachineId,
+  MachineSim,
+  ResKind,
+  TreeSim,
+  ProcessorId,
+} from '../types'
 import {
   BELT,
   BELT_IDS,
   ALL_BELT_IDS,
   BELT_RETIRES,
   CASH_BELT,
+  CASH_BELT_IDS,
+  FREIGHT,
+  EXPORT_BELT_IDS,
   ECONOMY,
   FURNACE,
   REP,
-  STATION_IDS,
   MACHINE,
   MACHINE_IDS,
   MACHINE_CFG,
@@ -25,11 +39,20 @@ import {
 } from '../balance'
 import { dist, lerpAngle, damp } from '../util'
 import { beltPerkMult } from '../perks'
-import { CASH_LIFT } from '../state'
 import { fmt } from '../format'
 import { sfx } from '../audio'
 import { addXp, banner } from './progress'
-import { type Source, type Sink, procSource, depotSource, stationSink, furnaceSink, procInSink, depotSink } from './sinks'
+import {
+  type Source,
+  type Sink,
+  procSource,
+  depotSource,
+  stationSink,
+  furnaceSink,
+  procInSink,
+  depotSink,
+  terminalSink,
+} from './sinks'
 
 function beltEnds(sim: Sim, id: BeltId): { src: Source; sink: Sink } {
   switch (id) {
@@ -53,11 +76,70 @@ function beltEnds(sim: Sim, id: BeltId): { src: Source; sink: Sink } {
       return { src: machineSource(sim.machines.auger, 'fish'), sink: procInSink(sim.proc.smokehouse) }
     case 'drill':
       return { src: machineSource(sim.machines.drill, 'coal'), sink: depotSink(sim.coalDepot, 'stacking coal') }
+    // Industrial Park: export lines out of the camp, product belts to the terminals
+    case 'exLog':
+      return { src: depotSource(sim.depot), sink: procInSink(sim.proc.furnFactory) }
+    case 'exCoal':
+      return { src: depotSource(sim.coalDepot), sink: procInSink(sim.proc.steelMill) }
+    case 'exCoat':
+      return { src: procSource(sim.proc.tailor), sink: procInSink(sim.proc.fashion) }
+    case 'exFish':
+      return { src: procSource(sim.proc.smokehouse), sink: procInSink(sim.proc.cannery) }
+    case 'pFurn':
+      return { src: procSource(sim.proc.furnFactory), sink: terminalSink(sim.terminals.dock, 'furniture') }
+    case 'pSteel':
+      return { src: procSource(sim.proc.steelMill), sink: terminalSink(sim.terminals.port, 'steel') }
+    case 'pJacket':
+      return { src: procSource(sim.proc.fashion), sink: terminalSink(sim.terminals.air, 'jacket') }
+    case 'pCanned':
+      return { src: procSource(sim.proc.cannery), sink: terminalSink(sim.terminals.air, 'canned') }
   }
 }
 
+/**
+ * Export lines share their camp source with the stalls: they get first pick
+ * of only their share of what's hauled off it (more with upgrades), plus
+ * anything that piles up because nobody else is taking it.
+ */
+const exportShare: Partial<Record<BeltId, { ex: number; all: number; seen: number }>> = {}
+
+function exportAllowed(sim: Sim, id: BeltId, srcCount: number, dt: number): boolean {
+  const b = sim.belts[id]
+  const total =
+    id === 'exLog'
+      ? sim.depot.taken
+      : id === 'exCoal'
+        ? sim.coalDepot.taken
+        : id === 'exCoat'
+          ? sim.proc.tailor.taken
+          : sim.proc.smokehouse.taken
+  const now = total ?? 0
+  const st = (exportShare[id] ??= { ex: 0, all: 0, seen: now })
+  st.all += Math.max(0, now - st.seen)
+  st.seen = now
+  // forget slowly, so the split follows what's happening now
+  const k = Math.exp(-dt / 40)
+  st.ex *= k
+  st.all *= k
+  const share = FREIGHT.exportShare[Math.min(FREIGHT.exportShare.length - 1, b.level)]
+  return srcCount >= FREIGHT.exportOverflow || st.ex <= share * st.all + 0.5
+}
+
+function noteExport(id: BeltId) {
+  const st = exportShare[id]
+  if (st) st.ex++
+}
+
+const isExport = (id: BeltId) => (EXPORT_BELT_IDS as BeltId[]).includes(id)
+
 function machineSource(m: MachineSim, kind: ResKind): Source {
-  return { at: m.pos, kind, open: m.level > 0, count: m.buf[kind] ?? 0, take: () => (m.buf[kind] = (m.buf[kind] ?? 0) - 1) }
+  return {
+    at: m.pos,
+    kind,
+    open: m.level > 0,
+    count: m.buf[kind] ?? 0,
+    take: () => (m.buf[kind] = (m.buf[kind] ?? 0) - 1),
+  }
 }
 
 // ---------------- belts replace their haulers ----------------
@@ -131,10 +213,34 @@ function deliverLoad(sim: Sim, role: WorkerRole, n: number) {
   else if (role === 'coalCarrier') sim.furnace.fuel = Math.min(sim.furnace.cap, sim.furnace.fuel + n)
 }
 
-/** world position + heading of a point `d` metres along the belt */
-export function beltPoint(sim: Sim, id: BeltId, d: number, out: { x: number; z: number; yaw: number }) {
+/**
+ * world position + heading of a point `d` metres along the belt. Overhead
+ * belts climb a lift at the start and drop down one at the end (`y` is set
+ * when the out object has one).
+ */
+export function beltPoint(sim: Sim, id: BeltId, d: number, out: { x: number; z: number; yaw: number; y?: number }) {
   const b = sim.belts[id]
   const p = b.path
+  if (b.h > 0) {
+    if (d <= b.lift) {
+      out.x = p[0].x
+      out.z = p[0].z
+      out.y = b.h - b.lift + d
+      out.yaw = Math.atan2(p[1].x - p[0].x, p[1].z - p[0].z)
+      return out
+    }
+    if (d >= b.lift + b.run) {
+      const end = p[p.length - 1]
+      const prev = p[p.length - 2]
+      out.x = end.x
+      out.z = end.z
+      out.y = b.h - Math.min(b.lift, d - b.lift - b.run)
+      out.yaw = Math.atan2(end.x - prev.x, end.z - prev.z)
+      return out
+    }
+    d -= b.lift
+    out.y = b.h
+  }
   let i = 1
   while (i < p.length - 1 && b.dists[i] < d) i++
   const a = p[i - 1]
@@ -180,33 +286,34 @@ function updateBelt(sim: Sim, id: BeltId, dt: number) {
 
   // load a new item once the start is clear
   const last = items.length ? items[items.length - 1] : Infinity
+  const exp = isExport(id)
+  if (exp && !exportAllowed(sim, id, src.count, dt)) return
   if (src.open && src.count > 0 && last >= BELT.spacing) {
     src.take()
     items.push(0)
+    if (exp) noteExport(id)
   }
 }
 
 // ---------------- cash belts: pay piles -> chest ----------------
 
-const H = CASH_BELT.height
-
 /** where a cash bundle `d` metres along its belt is: up the lift, overhead, down into the chest */
 export function cashPoint(b: CashBeltSim, d: number, out: { x: number; y: number; z: number; yaw: number }) {
   const p = b.path
-  if (d <= CASH_LIFT) {
+  if (d <= b.lift) {
     out.x = p[0].x
     out.z = p[0].z
-    out.y = H - CASH_LIFT + d
+    out.y = b.h - b.lift + d
     out.yaw = Math.atan2(p[1].x - p[0].x, p[1].z - p[0].z)
     return out
   }
-  const h = d - CASH_LIFT
+  const h = d - b.lift
   if (h >= b.run) {
     const end = p[p.length - 1]
     const prev = p[p.length - 2]
     out.x = end.x
     out.z = end.z
-    out.y = H - Math.min(CASH_LIFT, h - b.run)
+    out.y = b.h - Math.min(b.lift, h - b.run)
     out.yaw = Math.atan2(end.x - prev.x, end.z - prev.z)
     return out
   }
@@ -217,9 +324,18 @@ export function cashPoint(b: CashBeltSim, d: number, out: { x: number; y: number
   const t = (h - b.dists[i - 1]) / (b.dists[i] - b.dists[i - 1] || 1)
   out.x = a.x + (c.x - a.x) * t
   out.z = a.z + (c.z - a.z) * t
-  out.y = H
+  out.y = b.h
   out.yaw = Math.atan2(c.x - a.x, c.z - a.z)
   return out
+}
+
+/** a cash belt runs once its pile has something feeding it */
+export function cashBeltOn(sim: Sim, id: CashBeltId) {
+  if (sim.cash.level <= 0) return false
+  if (id === 'heat') return sim.furnace.built
+  if (id === 'bounty') return sim.clock.enabled
+  if (id === 'dock' || id === 'port' || id === 'air') return sim.terminals[id].open
+  return sim.stations[id as StationId].unlocked
 }
 
 function updateCashBelts(sim: Sim, dt: number) {
@@ -228,11 +344,10 @@ function updateCashBelts(sim: Sim, dt: number) {
   const speed = beltSpeed(cash.level) * 1.2 * beltPerkMult(sim)
   const chest = sim.chest.pos
 
-  for (const id of STATION_IDS) {
+  for (const id of CASH_BELT_IDS) {
     const b = cash.belts[id]
-    const st = sim.stations[id]
-    if (!st.unlocked) continue
-    const pile = sim.piles.find((p) => p.id === st.payPileId)!
+    if (!cashBeltOn(sim, id)) continue
+    const pile = sim.piles.find((p) => p.id === b.pile)!
 
     // the front bundle drops into the chest
     while (b.items.length && b.items[0] >= b.length - 0.001) {
@@ -251,30 +366,42 @@ function updateCashBelts(sim: Sim, dt: number) {
     // load a bundle off the pile once the lift is clear
     const last = b.items.length ? b.items[b.items.length - 1] : Infinity
     if (pile.value >= 1 && pile.claimedBy === null && last >= BELT.spacing) {
-      const take = Math.min(Math.floor(pile.value), Math.max(ECONOMY.billValue, Math.ceil(pile.value * CASH_BELT.chunkFrac)))
+      const take = Math.min(
+        Math.floor(pile.value),
+        Math.max(ECONOMY.billValue, Math.ceil(pile.value * CASH_BELT.chunkFrac)),
+      )
       pile.value -= take
       b.items.push(0)
       b.vals.push(take)
     }
   }
 
-  // caravan pay, wolf bounties and furnace heat have no stall: bank them straight into the chest
-  for (const id of ['caravanPay', 'bountyPay', 'heatPay'] as PileId[]) {
-    const pile = sim.piles.find((p) => p.id === id)!
-    if (pile.value < 1) continue
-    const take = Math.min(pile.value, Math.max(CASH_BELT.bankRate, pile.value * 1.5) * dt)
-    pile.value -= take
+  // caravan pay has no belt: bank it straight into the chest
+  const caravan = sim.piles.find((p) => p.id === 'caravanPay')!
+  if (caravan.value >= 1) {
+    const take = Math.min(caravan.value, Math.max(CASH_BELT.bankRate, caravan.value * 1.5) * dt)
+    caravan.value -= take
     sim.money += take
     sim.stats.collected += take
     cash.fxAcc += take
-    if (Math.random() < dt * 8) sim.fx.push({ t: 'coin', x: pile.pos.x, y: 0.6, z: pile.pos.z, to: { x: chest.x, y: 0.8, z: chest.z } })
+    if (Math.random() < dt * 8) {
+      sim.fx.push({ t: 'coin', x: caravan.pos.x, y: 0.6, z: caravan.pos.z, to: { x: chest.x, y: 0.8, z: chest.z } })
+    }
   }
 
   // one "+$" pop at the chest every so often instead of one per bundle
   cash.fxT -= dt
   if (cash.fxT <= 0 && cash.fxAcc >= 1) {
     cash.fxT = 0.7
-    sim.fx.push({ t: 'text', x: chest.x, y: 1.8, z: chest.z, str: `+$${fmt(Math.floor(cash.fxAcc))}`, color: '#b8ff9a', size: 0.9 })
+    sim.fx.push({
+      t: 'text',
+      x: chest.x,
+      y: 1.8,
+      z: chest.z,
+      str: `+$${fmt(Math.floor(cash.fxAcc))}`,
+      color: '#b8ff9a',
+      size: 0.9,
+    })
     sim.fx.push({ t: 'burst', x: chest.x, y: 0.8, z: chest.z, color: '#7fdc8f', n: 5, spread: 0.5 })
     sfx.coin()
     cash.fxAcc = 0
@@ -323,7 +450,12 @@ function updateGatherMachine(sim: Sim, m: MachineSim, dt: number) {
   node.shake = 1
   m.buf[kind] = (m.buf[kind] ?? 0) + 1
   if (node.wood <= 0) node.regrowT = NODES[cfg.nodes!].regrowTime
-  sim.fx.push({ t: 'itemfly', kind, from: { x: node.pos.x, y: 1.0, z: node.pos.z }, to: { x: m.pos.x, y: 1.4, z: m.pos.z } })
+  sim.fx.push({
+    t: 'itemfly',
+    kind,
+    from: { x: node.pos.x, y: 1.0, z: node.pos.z },
+    to: { x: m.pos.x, y: 1.4, z: m.pos.z },
+  })
   if (kind === 'log') sfx.chop()
   else if (kind === 'coal') sfx.thud()
 }
@@ -359,7 +491,12 @@ function updateSkinner(sim: Sim, m: MachineSim, dt: number) {
       m.buf.hide = (m.buf.hide ?? 0) + 1
     }
   }
-  sim.fx.push({ t: 'itemfly', kind: d.kind, from: { x: d.pos.x, y: 0.3, z: d.pos.z }, to: { x: m.pos.x, y: 1.6, z: m.pos.z } })
+  sim.fx.push({
+    t: 'itemfly',
+    kind: d.kind,
+    from: { x: d.pos.x, y: 0.3, z: d.pos.z },
+    to: { x: m.pos.x, y: 1.6, z: m.pos.z },
+  })
 }
 
 function updateMachines(sim: Sim, dt: number) {
@@ -395,7 +532,15 @@ function updateFurnace(sim: Sim, dt: number) {
     sim.stats.earned += pay
     if (sim.stats.coalBurned % 4 === 0) {
       sim.fx.push({ t: 'coin', x: f.pos.x, y: 2.2, z: f.pos.z, to: { x: pile.pos.x, y: 0.4, z: pile.pos.z } })
-      sim.fx.push({ t: 'text', x: pile.pos.x, y: 1.6, z: pile.pos.z, str: `+$${fmt(pay * 4)} 🔥`, color: '#ffd29a', size: 0.8 })
+      sim.fx.push({
+        t: 'text',
+        x: pile.pos.x,
+        y: 1.6,
+        z: pile.pos.z,
+        str: `+$${fmt(pay * 4)} 🔥`,
+        color: '#ffd29a',
+        size: 0.8,
+      })
     }
   }
   if (f.burnT <= 0) f.burnT = 0
@@ -404,7 +549,9 @@ function updateFurnace(sim: Sim, dt: number) {
 
 export function updateBelts(sim: Sim, dt: number) {
   updateMachines(sim, dt)
-  for (const id of ALL_BELT_IDS) updateBelt(sim, id, dt)
+  // export lines pick first (their share keeps the stalls supplied), then everything else
+  for (const id of EXPORT_BELT_IDS) updateBelt(sim, id, dt)
+  for (const id of ALL_BELT_IDS) if (!isExport(id)) updateBelt(sim, id, dt)
   updateCashBelts(sim, dt)
   updateFurnace(sim, dt)
 }

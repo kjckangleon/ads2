@@ -9,6 +9,10 @@ export const RES_ICON: Record<ResKind, string> = {
   fish: '🐟',
   smoked: '🍣',
   coal: '🪨',
+  furniture: '🪑',
+  steel: '🔩',
+  jacket: '🧥',
+  canned: '🥫',
 }
 
 export const RES_NAME: Record<ResKind, string> = {
@@ -20,6 +24,10 @@ export const RES_NAME: Record<ResKind, string> = {
   fish: 'fish',
   smoked: 'smoked fish',
   coal: 'coal',
+  furniture: 'furniture',
+  steel: 'steel',
+  jacket: 'designer jackets',
+  canned: 'canned fish',
 }
 
 export const NEED_ICON: Record<StationId, string> = {

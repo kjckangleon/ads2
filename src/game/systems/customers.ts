@@ -1,5 +1,17 @@
 import type { Sim, CustomerSim, StationSim, StationId } from '../types'
-import { CUSTOMERS, WORLD, RUSH, REP, STATION_IDS, maxCustomers, maxDemand, furnaceBonus, starSalesMult } from '../balance'
+import {
+  CUSTOMERS,
+  WORLD,
+  RUSH,
+  REP,
+  STATION_IDS,
+  maxCustomers,
+  maxDemand,
+  bulkDemand,
+  minSpawnInterval,
+  furnaceBonus,
+  starSalesMult,
+} from '../balance'
 import { seek, dist } from '../util'
 import { sfx } from '../audio'
 import { addXp, rushMult } from './progress'
@@ -65,7 +77,7 @@ function spawnInterval(sim: Sim): number {
   if (sim.tower.built) score += 1
   score += sim.workers.length * 0.6
   const f = 1 + 0.12 * score + REP.spawnPerLevel * (sim.rep.level - 1)
-  return Math.max(CUSTOMERS.minInterval, CUSTOMERS.baseInterval / f) / eventSpawnMult(sim)
+  return Math.max(minSpawnInterval(sim.rep.level), CUSTOMERS.baseInterval / f) / eventSpawnMult(sim)
 }
 
 /** Weighted pick among unlocked stalls that still have room in line. */
@@ -78,6 +90,9 @@ function pickStation(sim: Sim): StationId | null {
     let w = CUSTOMERS.weights[id]
     if (sim.clock.night && id === 'wood') w += CUSTOMERS.nightWoodBonus
     if (sim.clock.night && id === 'coat') w += CUSTOMERS.nightCoatBonus
+    // a stall piled high draws the crowd
+    if (sim.rep.level >= CUSTOMERS.bulkMinLevel)
+      w *= 1 + CUSTOMERS.bulkPull * Math.min(1, st.stock / CUSTOMERS.bulkPullStock)
     options.push([id, w])
     total += w
   }
@@ -101,7 +116,12 @@ function trySpawnCustomer(sim: Sim) {
   // higher levels: each survivor buys a bundle (VIPs always the biggest one)
   const most = maxDemand(sim.rep.level)
   const least = Math.ceil(most / 2)
-  const want = vip ? most : least + Math.floor(Math.random() * (most - least + 1))
+  // ...and a stall piled high with stock sells in bulk
+  const bulk = bulkDemand(sim.rep.level, st.stock, most)
+  const want = Math.min(
+    CUSTOMERS.demandCap,
+    (vip ? most : least + Math.floor(Math.random() * (most - least + 1))) + bulk,
+  )
   const c: CustomerSim = {
     id: sim.ids++,
     pos: {
@@ -190,7 +210,11 @@ function serve(sim: Sim, c: CustomerSim, st: StationSim) {
   sim.stats.earned += pay
   addXp(
     sim,
-    REP.xpServe + CUSTOMERS.xpPerExtraItem * (c.want - 1) + (tipped ? REP.xpTip : 0) + (c.vip ? REP.xpVip : 0),
+    // bulk extras pay cash, not XP, so levels don't snowball off a full shelf
+    REP.xpServe +
+      CUSTOMERS.xpPerExtraItem * (Math.min(c.want, maxDemand(sim.rep.level)) - 1) +
+      (tipped ? REP.xpTip : 0) +
+      (c.vip ? REP.xpVip : 0),
   )
 
   sim.fx.push({

@@ -43,6 +43,12 @@ function metric(sim: Sim, t: TaskSim): number {
       return s.bought
     case 'rush':
       return sim.rush.n
+    case 'trucks':
+      return s.trucksDone
+    case 'ships':
+      return s.shipsDone
+    case 'planes':
+      return s.planesDone
   }
 }
 
@@ -72,6 +78,12 @@ export function taskText(t: TaskSim): string {
       return `⬆️ Buy ${t.need} upgrades`
     case 'rush':
       return `🔥 Hit a RUSH of ×${rushMult(t.need).toFixed(2)}`
+    case 'trucks':
+      return `🚚 Load ${t.need} trucks`
+    case 'ships':
+      return `🚢 Load ${t.need} cargo ship${t.need > 1 ? 's' : ''}`
+    case 'planes':
+      return `✈️ Load ${t.need} cargo plane${t.need > 1 ? 's' : ''}`
   }
 }
 
@@ -93,13 +105,18 @@ function templates(sim: Sim): Template[] {
     out.push({ kind: 'serve', station: id, weight: slow ? 1.2 : 1, need: (l) => niceRound((slow ? 4 : 6) + 1.5 * l) })
   }
   if (sim.tower.built) out.push({ kind: 'kills', weight: 0.9, need: (l) => niceRound(8 + 2 * l) })
-  if (lvl >= ANIMALS.bear.level) out.push({ kind: 'bears', weight: 1.3, need: (l) => 1 + Math.floor((l - ANIMALS.bear.level) / 3) })
+  if (lvl >= ANIMALS.bear.level)
+    out.push({ kind: 'bears', weight: 1.3, need: (l) => 1 + Math.floor((l - ANIMALS.bear.level) / 3) })
   out.push({ kind: 'earn', weight: 1.1, need: (l) => niceRound(2500 * Math.pow(1.5, l - TASKS.level)) })
   out.push({ kind: 'tips', weight: 0.9, need: (l) => niceRound(8 + 2 * l) })
   if (caravansReady(sim) && lvl >= CARAVAN.unlockLevel) out.push({ kind: 'caravan', weight: 1.4, need: () => 1 })
   if (sim.furnace.built) out.push({ kind: 'coal', weight: 1, need: (l) => niceRound(30 + 8 * l) })
   out.push({ kind: 'buy', weight: 0.8, need: () => 3 })
   out.push({ kind: 'rush', weight: 1.2, need: (l) => Math.min(RUSH.maxStack, 6 + l) })
+  // Industrial Park freight
+  if (sim.terminals.dock.open) out.push({ kind: 'trucks', weight: 1.3, need: (l) => niceRound(6 + l / 2) })
+  if (sim.terminals.port.open) out.push({ kind: 'ships', weight: 1.6, need: () => 2 })
+  if (sim.terminals.air.open) out.push({ kind: 'planes', weight: 1.8, need: () => 2 })
   return out
 }
 
@@ -129,7 +146,8 @@ function payOut(sim: Sim, t: TaskSim) {
   sim.money += t.reward
   sim.stats.tasksDone++
   addXp(sim, t.xp)
-  for (let i = 0; i < 6; i++) sim.fx.push({ t: 'coin', x: p.x + (Math.random() - 0.5), y: 2.2, z: p.z + (Math.random() - 0.5) })
+  for (let i = 0; i < 6; i++)
+    sim.fx.push({ t: 'coin', x: p.x + (Math.random() - 0.5), y: 2.2, z: p.z + (Math.random() - 0.5) })
   sim.fx.push({ t: 'burst', x: p.x, y: 2, z: p.z, color: '#ffe680', n: 18, spread: 1.4, up: 4 })
   sim.fx.push({ t: 'text', x: p.x, y: 3, z: p.z, str: `🎯 +$${fmt(t.reward)}`, color: '#ffe680', size: 1.25 })
   banner(sim, `🎯 Task complete: +$${fmt(t.reward)}`, taskText(t), 'good')

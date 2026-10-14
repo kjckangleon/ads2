@@ -29,6 +29,8 @@ import { NodesView } from '../render/NodesView'
 import { CashBeltsView } from '../render/CashBeltsView'
 import { MachinesView } from '../render/MachinesView'
 import { LootView } from '../render/LootView'
+import { IndustryView } from '../render/IndustryView'
+import { VehiclesView } from '../render/VehiclesView'
 
 // Phones have 2-3x screens; rendering at 1x there looks pixelated, so even low
 // quality renders above 1x and the adaptive monitor trades it back for frame rate.
@@ -91,6 +93,8 @@ export function Game() {
       <CashBeltsView />
       <MachinesView />
       <LootView />
+      <IndustryView />
+      <VehiclesView />
       <TowerView />
       <CaravanView />
       <PadsView />

@@ -13,10 +13,20 @@ import { TextLabel } from './rutil'
 const MAX_CASH = 80
 const MAX_CHESTS = 3
 
-const goldMat = new THREE.MeshStandardMaterial({ color: '#e8bb4a', metalness: 0.6, roughness: 0.35, emissive: '#5a3d00' })
+const goldMat = new THREE.MeshStandardMaterial({
+  color: '#e8bb4a',
+  metalness: 0.6,
+  roughness: 0.35,
+  emissive: '#5a3d00',
+})
 const woodMat = new THREE.MeshStandardMaterial({ color: '#6e4a2a', roughness: 0.85 })
 const glowMat = new THREE.MeshBasicMaterial({ color: '#ffe680', transparent: true, opacity: 0.55, depthWrite: false })
-const cashRingMat = new THREE.MeshBasicMaterial({ color: '#9fe08a', transparent: true, opacity: 0.45, depthWrite: false })
+const cashRingMat = new THREE.MeshBasicMaterial({
+  color: '#9fe08a',
+  transparent: true,
+  opacity: 0.45,
+  depthWrite: false,
+})
 
 function makeChest() {
   const g = new THREE.Group()
@@ -55,7 +65,11 @@ export function LootView() {
     cash.count = 0
     cash.frustumCulled = false
     cash.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-    const rings = new THREE.InstancedMesh(new THREE.RingGeometry(0.45, 0.6, 18).rotateX(-Math.PI / 2), cashRingMat, MAX_CASH)
+    const rings = new THREE.InstancedMesh(
+      new THREE.RingGeometry(0.45, 0.6, 18).rotateX(-Math.PI / 2),
+      cashRingMat,
+      MAX_CASH,
+    )
     rings.count = 0
     rings.frustumCulled = false
     rings.renderOrder = 2
@@ -65,7 +79,13 @@ export function LootView() {
     return { group, cash, rings, chests }
   }, [])
   const tmp = useMemo(
-    () => ({ m: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), s: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0) }),
+    () => ({
+      m: new THREE.Matrix4(),
+      q: new THREE.Quaternion(),
+      p: new THREE.Vector3(),
+      s: new THREE.Vector3(),
+      up: new THREE.Vector3(0, 1, 0),
+    }),
     [],
   )
 

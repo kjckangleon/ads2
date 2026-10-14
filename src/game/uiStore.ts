@@ -7,7 +7,8 @@ function autoQuality(): Quality {
   const touch = 'ontouchstart' in window
   // WebKit (every iOS browser, Edge and Chrome included) under-reports
   // hardwareConcurrency, so the core count says nothing about an iPhone's GPU.
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const ios =
+    /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   if (ios) return 'medium'
   const cores = navigator.hardwareConcurrency ?? 4
   if (touch && cores <= 4) return 'low'
@@ -54,6 +55,12 @@ export interface UIState {
   caravanText: string
   caravanTime: number
   caravanFrac: number
+  /** Industrial Park: the docked ship / parked plane order (shown while you're in the park) */
+  inPark: boolean
+  shipText: string
+  shipTime: number
+  planeText: string
+  planeTime: number
   bannerId: number
   bannerText: string
   bannerSub: string
@@ -113,6 +120,11 @@ export const useUI = create<UIState>((set) => ({
   caravanText: '',
   caravanTime: 0,
   caravanFrac: 0,
+  inPark: false,
+  shipText: '',
+  shipTime: 0,
+  planeText: '',
+  planeTime: 0,
   bannerId: 0,
   bannerText: '',
   bannerSub: '',

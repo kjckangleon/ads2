@@ -54,7 +54,15 @@ export function killAnimal(sim: Sim, a: AnimalSim) {
   if (isBoss(a.kind)) bossDown(sim, a)
   sfx.kill()
   const big = a.kind === 'bear' || a.kind === 'goat' || isBoss(a.kind)
-  sim.fx.push({ t: 'burst', x: a.pos.x, y: 0.8, z: a.pos.z, color: '#e06a5a', n: big ? 22 : 10, spread: big ? 1.6 : 0.9 })
+  sim.fx.push({
+    t: 'burst',
+    x: a.pos.x,
+    y: 0.8,
+    z: a.pos.z,
+    color: '#e06a5a',
+    n: big ? 22 : 10,
+    spread: big ? 1.6 : 0.9,
+  })
   sim.fx.push({
     t: 'text',
     x: a.pos.x,
@@ -78,7 +86,15 @@ export function hurtAnimal(sim: Sim, a: AnimalSim, dmg: number, byTower: boolean
     if (dist(a.pos, sim.player.pos) < ANIMALS.bearAggro * (isBoss(a.kind) ? 1.6 : 1)) {
       if (a.state !== 'charge') {
         const roar = a.kind === 'mammoth' ? '🦣 HRRUUMPH!' : a.kind === 'yeti' ? '❄️ RAAWR!' : '🐻 GRRR!'
-        sim.fx.push({ t: 'text', x: a.pos.x, y: isBoss(a.kind) ? 4 : 2.6, z: a.pos.z, str: roar, color: '#ff9a6a', size: 1 })
+        sim.fx.push({
+          t: 'text',
+          x: a.pos.x,
+          y: isBoss(a.kind) ? 4 : 2.6,
+          z: a.pos.z,
+          str: roar,
+          color: '#ff9a6a',
+          size: 1,
+        })
       }
       a.state = 'charge'
       a.t = ANIMALS.bearChaseTime

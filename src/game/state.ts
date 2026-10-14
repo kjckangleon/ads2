@@ -14,9 +14,13 @@ import type {
   BeltId,
   BeltSim,
   CashBeltSim,
+  CashBeltId,
   MachineId,
   MachineSim,
   V2,
+  FactoryId,
+  TerminalId,
+  TerminalSim,
 } from './types'
 import {
   WORLD,
@@ -31,7 +35,9 @@ import {
   MACHINE_IDS,
   MACHINE_CFG,
   CASH_PATHS,
-  STATION_IDS,
+  CASH_BELT_IDS,
+  CASH_EXTRA,
+  CASH_BELT,
   ANIMALS,
   CARAVAN,
   CUSTOMERS,
@@ -51,6 +57,13 @@ import {
   playerCarry,
   animalHp,
   furnaceCap,
+  PARK,
+  FACTORY_IDS,
+  TERMINAL_IDS,
+  TERMINAL_CFG,
+  FREIGHT,
+  terminalCap,
+  terminalLoadTime,
 } from './balance'
 import { mulberry32, randRange } from './util'
 
@@ -100,6 +113,32 @@ function makeProcessor(id: ProcessorId, at: V2, unlocked: boolean): ProcessorSim
   }
 }
 
+/** a factory: like a workshop, but the export line drops in on the north side and products leave south */
+function makeFactory(id: FactoryId): ProcessorSim {
+  const at = PARK.factories[id]
+  const pr = makeProcessor(id, at, false)
+  pr.inZone = { x: at.x, z: at.z + PARK.inOff }
+  pr.outZone = { x: at.x, z: at.z + PARK.outOff }
+  pr.workSpot = { x: at.x, z: at.z }
+  return pr
+}
+
+function makeTerminal(id: TerminalId): TerminalSim {
+  const cfg = TERMINAL_CFG[id]
+  return {
+    id,
+    open: false,
+    pos: { ...cfg.pos },
+    restock: { ...cfg.restock },
+    kinds: [...cfg.kinds],
+    stock: Object.fromEntries(cfg.kinds.map((k) => [k, 0])),
+    cap: terminalCap(0),
+    level: 0,
+    loadTime: terminalLoadTime(0),
+    pile: cfg.pile,
+  }
+}
+
 function makeTrees(): TreeSim[] {
   const rng = mulberry32(1234)
   const trees: TreeSim[] = []
@@ -139,6 +178,9 @@ function makeNodes(spots: V2[], per: number): TreeSim[] {
   }))
 }
 
+/** height an overhead belt's items start from (and drop to) at each end */
+export const OVERHEAD_BASE = 0.5
+
 function makeBelt(id: BeltId): BeltSim {
   const cfg = BELT_CFG[id]
   const dists = [0]
@@ -147,13 +189,19 @@ function makeBelt(id: BeltId): BeltSim {
     const b = cfg.path[i]
     dists.push(dists[i - 1] + Math.hypot(b.x - a.x, b.z - a.z))
   }
+  const run = dists[dists.length - 1]
+  const h = cfg.h ?? 0
+  const lift = h > 0 ? h - OVERHEAD_BASE : 0
   return {
+    h,
+    lift,
+    run,
     id,
     kind: cfg.kind,
     level: 0,
     path: cfg.path.map((p) => ({ x: p.x, z: p.z })),
     dists,
-    length: dists[dists.length - 1],
+    length: run + lift * 2,
     items: [],
     blockedT: 0,
     pulse: 0,
@@ -163,14 +211,18 @@ function makeBelt(id: BeltId): BeltSim {
 /** vertical distance a cash bundle climbs off the pile (and drops into the chest) */
 export const CASH_LIFT = 2.9
 
-function makeCashBelt(id: StationId): CashBeltSim {
+function makeCashBelt(id: CashBeltId): CashBeltSim {
+  const extra = id in CASH_EXTRA ? CASH_EXTRA[id as keyof typeof CASH_EXTRA] : null
+  const pile = extra ? extra.pile : STATION_CFG[id as StationId].pile
+  const h = extra ? extra.h : CASH_BELT.height
   const path = CASH_PATHS[id].map((p) => ({ x: p.x, z: p.z }))
   const dists = [0]
   for (let i = 1; i < path.length; i++) {
     dists.push(dists[i - 1] + Math.hypot(path[i].x - path[i - 1].x, path[i].z - path[i - 1].z))
   }
   const run = dists[dists.length - 1]
-  return { station: id, path, dists, run, length: run + CASH_LIFT * 2, items: [], vals: [] }
+  const lift = CASH_LIFT + (h - CASH_BELT.height)
+  return { id, pile, h, lift, path, dists, run, length: run + lift * 2, items: [], vals: [] }
 }
 
 export function spawnAnimal(sim: Sim, kind: AnimalKind): AnimalSim {
@@ -267,6 +319,7 @@ export function createSim(): Sim {
       kitchen: makeProcessor('kitchen', WORLD.kitchen, false),
       tailor: makeProcessor('tailor', WORLD.tailor, false),
       smokehouse: makeProcessor('smokehouse', WORLD.smokehouse, false),
+      ...(Object.fromEntries(FACTORY_IDS.map((id) => [id, makeFactory(id)])) as Record<FactoryId, ProcessorSim>),
     },
     trees: makeTrees(),
     holes: makeNodes(HOLE_SPOTS, NODES.hole.per),
@@ -294,17 +347,33 @@ export function createSim(): Sim {
     pads: makePads(),
     chest: { pos: { x: WORLD.chest.x, z: WORLD.chest.z } },
     depot: { pos: { x: WORLD.logDepot.x, z: WORLD.logDepot.z }, count: 0, cap: WORKERS.depotCap, kind: 'log' },
-    coalDepot: { pos: { x: WORLD.coalDepot.x, z: WORLD.coalDepot.z }, count: 0, cap: WORKERS.coalDepotCap, kind: 'coal' },
+    coalDepot: {
+      pos: { x: WORLD.coalDepot.x, z: WORLD.coalDepot.z },
+      count: 0,
+      cap: WORKERS.coalDepotCap,
+      kind: 'coal',
+    },
     belts: Object.fromEntries(ALL_BELT_IDS.map((id) => [id, makeBelt(id)])) as Record<BeltId, BeltSim>,
     machines: Object.fromEntries(
       MACHINE_IDS.map((id) => [
         id,
-        { id, level: 0, pos: { ...MACHINE_CFG[id].pos }, yaw: 0, workT: 0, target: -1, buf: {}, spin: 0, active: false, skin: 0 },
+        {
+          id,
+          level: 0,
+          pos: { ...MACHINE_CFG[id].pos },
+          yaw: 0,
+          workT: 0,
+          target: -1,
+          buf: {},
+          spin: 0,
+          active: false,
+          skin: 0,
+        },
       ]),
     ) as Record<MachineId, MachineSim>,
     cash: {
       level: 0,
-      belts: Object.fromEntries(STATION_IDS.map((id) => [id, makeCashBelt(id)])) as Record<StationId, CashBeltSim>,
+      belts: Object.fromEntries(CASH_BELT_IDS.map((id) => [id, makeCashBelt(id)])) as Record<CashBeltId, CashBeltSim>,
       fxAcc: 0,
       fxT: 0,
     },
@@ -339,6 +408,10 @@ export function createSim(): Sim {
       wolvesKilled: 0,
       caravansDone: 0,
       caravanVisits: 0,
+      trucksDone: 0,
+      shipsDone: 0,
+      planesDone: 0,
+      freightEarned: 0,
     },
     fx: [],
     focus: null,
@@ -360,7 +433,7 @@ export function createSim(): Sim {
       earned: 0,
       count: 0,
     },
-    zones: { tannery: false, fishery: false, mine: false },
+    zones: { tannery: false, fishery: false, mine: false, industry: false },
     lodge: { spdLvl: 0, capLvl: 0 },
     game: { lvl: 0 },
     guides: [],
@@ -378,6 +451,16 @@ export function createSim(): Sim {
     rateEarned: 0,
     lastWall: 0,
     offline: null,
+    terminals: Object.fromEntries(TERMINAL_IDS.map((id) => [id, makeTerminal(id)])) as Record<TerminalId, TerminalSim>,
+    freight: {
+      vehicles: [],
+      truckT: 3,
+      shipT: FREIGHT.ship.first,
+      planeT: FREIGHT.plane.first,
+      trucks: 0,
+      ships: 0,
+      planes: 0,
+    },
     moving: 0,
     movingStars: 0,
   }
@@ -391,7 +474,10 @@ export function createSim(): Sim {
 function seedQueue(sim: Sim) {
   const st = sim.stations.wood
   for (let i = 0; i < CUSTOMERS.startQueue; i++) {
-    const pos = { x: st.queueBase.x + st.queueDir.x * st.queueSpacing * i, z: st.queueBase.z + st.queueDir.z * st.queueSpacing * i }
+    const pos = {
+      x: st.queueBase.x + st.queueDir.x * st.queueSpacing * i,
+      z: st.queueBase.z + st.queueDir.z * st.queueSpacing * i,
+    }
     const c: CustomerSim = {
       id: sim.ids++,
       pos,

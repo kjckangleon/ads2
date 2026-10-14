@@ -35,7 +35,9 @@ export function DebugPanel() {
 
   return (
     <div className="debug-panel">
-      <div className="debug-title">FROSTLINE debug — fps {fps} · draws {(window as any).__drawCalls ?? '–'}</div>
+      <div className="debug-title">
+        FROSTLINE debug — fps {fps} · draws {(window as any).__drawCalls ?? '–'}
+      </div>
       <div className="debug-row">
         <button onClick={() => (s.money += 500)}>+500💰</button>
         <button onClick={() => (s.money += 5000)}>+5000💰</button>
@@ -86,6 +88,32 @@ export function DebugPanel() {
             open {z}
           </button>
         ))}
+        <button
+          onClick={() => {
+            // the whole Industrial Park: every stage, export line and product belt
+            for (const id of [
+              'zone_industry',
+              'zone_port',
+              'zone_airport',
+              'ex_log',
+              'ex_coal',
+              'ex_coat',
+              'ex_fish',
+              'pb_furn',
+              'pb_steel',
+              'pb_jacket',
+              'pb_canned',
+            ]) {
+              const pad = s.pads.find((p) => p.id === id)!
+              if (pad.done) continue
+              pad.level++
+              pad.done = pad.level >= pad.maxLevel
+              applyPad(s, pad)
+            }
+          }}
+        >
+          +park
+        </button>
         <button
           onClick={() => {
             for (const id of [...BELT_IDS, 'cash', ...MACHINE_IDS.map((m) => `m:${m}`)]) {
@@ -148,7 +176,9 @@ export function DebugPanel() {
           }),
           `log pile ${s.depot.count}/${s.depot.cap}  coal pile ${s.coalDepot.count}/${s.coalDepot.cap}`,
           `furnace ${s.furnace.built ? `fuel ${s.furnace.fuel}/${s.furnace.cap} lv${s.furnace.level} ${s.furnace.burning ? 'LIT' : 'cold'}` : 'not built'}`,
-          `cash belts L${s.cash.level}  ${STATION_IDS.map((id) => `${id}:${s.cash.belts[id].items.length}`).join(' ')}`,
+          `cash belts L${s.cash.level}  ${Object.values(s.cash.belts)
+            .map((b) => `${b.id}:${b.items.length}`)
+            .join(' ')}`,
           `machines ${MACHINE_IDS.map((id) => `${id}:${s.machines[id].level ? `L${s.machines[id].level}${s.machines[id].active ? '*' : ''}` : '-'}`).join(' ')}`,
           `belts ${BELT_IDS.map((id) => `${id}:${s.belts[id].level ? `L${s.belts[id].level}·${s.belts[id].items.length}` : '-'}`).join(' ')}`,
           `tasks ${s.tasks.map((t) => `${t.kind}${t.station ? `/${t.station}` : ''} ${t.need}`).join(' | ')}`,

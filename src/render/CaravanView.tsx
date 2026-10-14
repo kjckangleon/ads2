@@ -14,7 +14,9 @@ import { lanternMat } from './StationsView'
 const woodMat = new THREE.MeshStandardMaterial({ color: '#7a5a38', roughness: 0.9 })
 const runnerMat = new THREE.MeshStandardMaterial({ color: '#4a3826', roughness: 0.8 })
 const canvasMat = new THREE.MeshStandardMaterial({ color: '#d9cdb2', roughness: 0.95, side: THREE.DoubleSide })
-const crateMats = ['#9a7448', '#7f5f3a', '#a8844f'].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 }))
+const crateMats = ['#9a7448', '#7f5f3a', '#a8844f'].map(
+  (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 }),
+)
 const ringMat = new THREE.MeshBasicMaterial({ color: '#7fe0ff', transparent: true, opacity: 0.6, depthWrite: false })
 
 function buildSled() {

@@ -12,6 +12,7 @@ import { beltPoint } from '../game/systems/belts'
 import { makeCarryItem } from './characters'
 import { PopIn, Squash } from './anim'
 import { mergeStatic } from './rutil'
+import { buildOverhead, groundObstacles } from './overhead'
 import { beltPerkMult } from '../game/perks'
 
 const W = BELT.width
@@ -52,14 +53,53 @@ export function stripeCanvas(): HTMLCanvasElement {
 
 interface BeltVisual {
   root: THREE.Group
-  tex: THREE.CanvasTexture
+  tex: THREE.Texture
   rails: THREE.Mesh[]
   items: THREE.InstancedMesh
   endCap: THREE.Group
 }
 
+// export lines: orange freight rails and amber lift towers
+const exportRailMat = new THREE.MeshStandardMaterial({ color: '#f08a2a', roughness: 0.45, metalness: 0.5 })
+const exportCapMat = new THREE.MeshStandardMaterial({ color: '#e07a1a', roughness: 0.5, metalness: 0.3 })
+const exportGlassMat = new THREE.MeshStandardMaterial({
+  color: '#ffd6a0',
+  transparent: true,
+  opacity: 0.2,
+  roughness: 0.2,
+  depthWrite: false,
+})
+
+/** an overhead export line: the shared overhead structure plus its items */
+function buildOverheadBelt(id: BeltId): BeltVisual {
+  const b = sim.belts[id]
+  const { root, tex, rails } = buildOverhead(b.path, b.dists, b.h, groundObstacles(), {
+    width: W,
+    glass: exportGlassMat,
+    cap: exportCapMat,
+    rail: exportRailMat,
+  })
+  const endCap = new THREE.Group()
+  root.add(endCap)
+  const proto = makeCarryItem(b.kind)
+  const max = Math.ceil(b.length / BELT.spacing) + 2
+  const items = new THREE.InstancedMesh(proto.geometry, proto.material, max)
+  items.count = 0
+  items.castShadow = true
+  items.frustumCulled = false
+  items.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+  root.add(items)
+  const keep = new Set<THREE.Object3D>([items, endCap, ...rails])
+  mergeStatic(root, (o) => !keep.has(o))
+  const railSet = new Set<THREE.Object3D>([...rails, ...rails.map((r) => r.parent!)])
+  mergeStatic(root, (o) => railSet.has(o))
+  // the orange rails stay orange: they don't change material with the level
+  return { root, tex, rails: [], items, endCap }
+}
+
 function buildBelt(id: BeltId): BeltVisual {
   const b = sim.belts[id]
+  if (b.h > 0) return buildOverheadBelt(id)
   const root = new THREE.Group()
   const tex = new THREE.CanvasTexture(stripeCanvas())
   tex.wrapS = THREE.RepeatWrapping
@@ -172,7 +212,7 @@ function BeltView({ id }: { id: BeltId }) {
       p: new THREE.Vector3(),
       s: new THREE.Vector3(1, 1, 1),
       up: new THREE.Vector3(0, 1, 0),
-      at: { x: 0, z: 0, yaw: 0 },
+      at: { x: 0, z: 0, yaw: 0, y: 0 },
       lastLevel: -1,
     }),
     [],
@@ -204,7 +244,8 @@ function BeltView({ id }: { id: BeltId }) {
       tmp.q.setFromAxisAngle(tmp.up, tmp.at.yaw)
       // pop up off the hopper over the first stretch
       const rise = Math.min(1, b.items[i] / 0.35)
-      tmp.p.set(tmp.at.x, TOP + 0.1 * rise + 0.06, tmp.at.z)
+      if (b.h > 0) tmp.p.set(tmp.at.x, tmp.at.y + 0.1, tmp.at.z)
+      else tmp.p.set(tmp.at.x, TOP + 0.1 * rise + 0.06, tmp.at.z)
       tmp.s.setScalar(0.4 + 0.6 * rise)
       tmp.m.compose(tmp.p, tmp.q, tmp.s)
       v.items.setMatrixAt(i, tmp.m)

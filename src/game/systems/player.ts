@@ -11,6 +11,8 @@ import {
   STATION_IDS,
   PROC_IDS,
   CARAVAN,
+  FACTORY_IDS,
+  TERMINAL_IDS,
   playerChopTime,
   playerDamage,
 } from '../balance'
@@ -39,7 +41,8 @@ function staticColliders(sim: Sim): Circle[] {
   }
   for (const id of PROC_IDS) {
     const pr = sim.proc[id]
-    if (pr.unlocked) c.push({ x: pr.pos.x, z: pr.pos.z, r: 1.1 })
+    // factories are big buildings: they use boxes (staticBoxes)
+    if (pr.unlocked && !(FACTORY_IDS as string[]).includes(id)) c.push({ x: pr.pos.x, z: pr.pos.z, r: 1.1 })
   }
   if (sim.tower.built) c.push({ x: sim.tower.pos.x, z: sim.tower.pos.z, r: 1.0 })
   if (sim.furnace.built) c.push({ x: sim.furnace.pos.x, z: sim.furnace.pos.z, r: FURNACE.radius })
@@ -56,15 +59,42 @@ interface Box {
 }
 
 /** Long obstacles use boxes: two overlapping circles leave a crease that traps the player. */
+/** half sizes of the park's buildings (factories, then each terminal) */
+const FACTORY_HALF = { x: 2.5, z: 2.0 }
+const TERMINAL_HALF: Record<string, { x: number; z: number }> = {
+  dock: { x: 2.5, z: 1.7 },
+  port: { x: 3.4, z: 1.8 },
+  air: { x: 3.0, z: 1.6 },
+}
+
+function parkBoxes(sim: Sim): Box[] {
+  const out: Box[] = []
+  if (!sim.zones.industry) return out
+  for (const id of FACTORY_IDS) {
+    const pr = sim.proc[id]
+    if (!pr.unlocked) continue
+    const h = FACTORY_HALF
+    out.push({ minX: pr.pos.x - h.x, maxX: pr.pos.x + h.x, minZ: pr.pos.z - h.z, maxZ: pr.pos.z + h.z })
+  }
+  for (const id of TERMINAL_IDS) {
+    const t = sim.terminals[id]
+    if (!t.open) continue
+    const h = TERMINAL_HALF[id]
+    out.push({ minX: t.pos.x - h.x, maxX: t.pos.x + h.x, minZ: t.pos.z - h.z, maxZ: t.pos.z + h.z })
+  }
+  return out
+}
+
 function staticBoxes(sim: Sim): Box[] {
-  if (sim.caravan.state === 'away') return []
+  const park = parkBoxes(sim)
+  if (sim.caravan.state === 'away') return park
   const x = caravanX(sim)
   const z = WORLD.caravanSpot.z
   // sled body behind the centre, reindeer out front in the direction of travel
   const f = sim.caravan.state === 'leaving' ? -1 : 1
   const a = x - 1.7 * f
   const b = x + 3.1 * f
-  return [{ minX: Math.min(a, b), maxX: Math.max(a, b), minZ: z - 0.8, maxZ: z + 0.8 }]
+  return [...park, { minX: Math.min(a, b), maxX: Math.max(a, b), minZ: z - 0.8, maxZ: z + 0.8 }]
 }
 
 function pushOutOfBox(p: V2, b: Box, r: number) {
@@ -326,12 +356,7 @@ function depositAndTake(sim: Sim) {
         to: { x: pr.inZone.x, y: 0.8, z: pr.inZone.z },
       })
     }
-    if (
-      pr.outCount > 0 &&
-      p.transferCd <= 0 &&
-      hasRoom(sim) &&
-      dist(p.pos, pr.outZone) < PLAYER.depositRange * 0.8
-    ) {
+    if (pr.outCount > 0 && p.transferCd <= 0 && hasRoom(sim) && dist(p.pos, pr.outZone) < PLAYER.depositRange * 0.8) {
       pr.outCount--
       p.carry.push(pr.outKind)
       p.transferCd = PLAYER.transferInterval
@@ -378,6 +403,29 @@ function useDepot(sim: Sim, d: DepotSim, automated: boolean) {
     from: { x: d.pos.x, y: 0.6, z: d.pos.z },
     to: { x: p.pos.x, y: 1.8, z: p.pos.z },
   })
+}
+
+/** Drop products off at an Industrial Park terminal (any kind it ships). */
+function stockTerminals(sim: Sim) {
+  const p = sim.player
+  if (p.transferCd > 0 || p.carry.length === 0) return
+  for (const id of TERMINAL_IDS) {
+    const t = sim.terminals[id]
+    if (!t.open || dist(p.pos, t.restock) >= PLAYER.depositRange) continue
+    const kind = t.kinds.find((k) => p.carry.includes(k) && (t.stock[k] ?? 0) < t.cap)
+    if (!kind) continue
+    takeFromStack(p.carry, kind)
+    t.stock[kind] = (t.stock[kind] ?? 0) + 1
+    p.transferCd = PLAYER.transferInterval
+    sfx.unstack(p.carry.length)
+    sim.fx.push({
+      t: 'itemfly',
+      kind,
+      from: { x: p.pos.x, y: 1.8, z: p.pos.z },
+      to: { x: t.pos.x, y: 1.0, z: t.pos.z },
+    })
+    return
+  }
 }
 
 /** Shovel carried coal into the furnace. */
@@ -468,6 +516,7 @@ export function updatePlayer(sim: Sim, dt: number) {
   useDepot(sim, sim.depot, automated(sim, 'logCarrier'))
   if (sim.zones.mine) useDepot(sim, sim.coalDepot, automated(sim, 'coalCarrier'))
   feedFurnace(sim)
+  stockTerminals(sim)
   supplyCaravan(sim)
   collectMoney(sim, dt)
 }

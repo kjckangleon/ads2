@@ -35,7 +35,12 @@ function DepotPile({ get, kind }: { get: () => DepotSim; kind: 'log' | 'coal' })
       kind === 'log'
         ? new ItemGrid(logGeo, logMat, d.cap, gridLayout(1, 6, 0.85, 0.23, 0.21, true))
         : new ItemGrid(coalLumpGeo, coalMat, d.cap, gridLayout(4, 4, 0.36, 0.36, 0.2))
-    const ringMat = new THREE.MeshBasicMaterial({ color: style.ring, transparent: true, opacity: 0.4, depthWrite: false })
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: style.ring,
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false,
+    })
     grid.mesh.position.y = 0.12
     grid.mesh.castShadow = true
     root.add(grid.mesh)

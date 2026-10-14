@@ -34,13 +34,7 @@ export function damp(rate: number, dt: number) {
  * Move an entity with {pos, yaw} toward target at speed.
  * Returns true when within `arrive` of the target.
  */
-export function seek(
-  e: { pos: V2; yaw: number },
-  target: V2,
-  speed: number,
-  dt: number,
-  arrive = 0.25,
-): boolean {
+export function seek(e: { pos: V2; yaw: number }, target: V2, speed: number, dt: number, arrive = 0.25): boolean {
   const dx = target.x - e.pos.x
   const dz = target.z - e.pos.z
   const d = Math.hypot(dx, dz)

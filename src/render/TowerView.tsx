@@ -180,8 +180,7 @@ export function TowerView() {
     const justBuilt = sim.time - shownSince.current < 5
     // at night the ring shows what the tower actually protects
     built.rangeRing.visible = nearPlayer || justBuilt || sim.clock.dark > 0.3
-    ;(built.rangeRing.material as THREE.MeshBasicMaterial).opacity =
-      0.22 + Math.sin(sim.time * 3) * 0.08
+    ;(built.rangeRing.material as THREE.MeshBasicMaterial).opacity = 0.22 + Math.sin(sim.time * 3) * 0.08
   })
 
   return <primitive object={built.root} />

@@ -163,7 +163,9 @@ export function FurnaceView() {
     v.fuel.update(f.fuel, sim.time)
     v.label.set(`${f.fuel}/${f.cap}`, f.fuel === 0 ? '#ff9a8a' : '#ffffff')
     v.bonus.set(
-      f.burning ? `💵 $${fmt(furnacePay(f.level))}/🪨 · sales +${Math.round(furnaceBonus(f.level) * 100)}%` : 'feed me 🪨 coal',
+      f.burning
+        ? `💵 $${fmt(furnacePay(f.level))}/🪨 · sales +${Math.round(furnaceBonus(f.level) * 100)}%`
+        : 'feed me 🪨 coal',
       f.burning ? '#ffd29a' : '#9fc4ff',
     )
   })

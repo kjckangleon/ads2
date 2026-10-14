@@ -132,7 +132,11 @@ function startWind() {
 }
 
 /** Pitch glide through [time, freq] points — used for the wolf howl. */
-function sweep(points: [number, number][], dur: number, opts: { type?: OscillatorType; vol?: number; delay?: number } = {}) {
+function sweep(
+  points: [number, number][],
+  dur: number,
+  opts: { type?: OscillatorType; vol?: number; delay?: number } = {},
+) {
   const c = ac()
   if (!c || !master || muted) return
   const t0 = c.currentTime + (opts.delay ?? 0)
@@ -259,8 +263,26 @@ export const sfx = {
   },
   howl() {
     if (throttled('howl', 2)) return
-    sweep([[0, 330], [0.45, 560], [1.1, 520], [1.6, 300]], 1.7, { vol: 0.07 })
-    sweep([[0, 336], [0.5, 572], [1.1, 512], [1.6, 310]], 1.7, { vol: 0.035, delay: 0.06 })
+    sweep(
+      [
+        [0, 330],
+        [0.45, 560],
+        [1.1, 520],
+        [1.6, 300],
+      ],
+      1.7,
+      { vol: 0.07 },
+    )
+    sweep(
+      [
+        [0, 336],
+        [0.5, 572],
+        [1.1, 512],
+        [1.6, 310],
+      ],
+      1.7,
+      { vol: 0.035, delay: 0.06 },
+    )
   },
   growl() {
     if (throttled('growl', 0.2)) return

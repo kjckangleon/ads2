@@ -9,6 +9,7 @@ import { updateTower } from './systems/tower'
 import { updateWorkers } from './systems/workers'
 import { updateProcessors } from './systems/processors'
 import { updateBelts } from './systems/belts'
+import { updateFreight, bigOrderView } from './systems/freight'
 import { updateMeta, pendingStars, canDoubleOffline } from './systems/meta'
 import { starSalesMult } from './balance'
 import { updateTasks, taskProgress, taskText } from './systems/tasks'
@@ -53,6 +54,8 @@ function eventView(sim: Sim) {
 function syncUI(sim: Sim) {
   const cv = sim.caravan
   const c = sim.clock
+  const ship = bigOrderView(sim, 'ship')
+  const plane = bigOrderView(sim, 'plane')
   const next: Partial<UIState> = {
     money: Math.floor(sim.money),
     objectiveText: objectiveText(sim),
@@ -72,6 +75,11 @@ function syncUI(sim: Sim) {
     caravanText: cv.state === 'waiting' || cv.state === 'arriving' ? orderText(cv.order) : '',
     caravanTime: Math.ceil(cv.timer),
     caravanFrac: cv.maxTimer > 0 ? q(cv.timer / cv.maxTimer, 50) : 0,
+    inPark: sim.zones.industry && sim.player.pos.z > 34.5,
+    shipText: ship.text,
+    shipTime: ship.time,
+    planeText: plane.text,
+    planeTime: plane.time,
     bannerId: sim.banner.id,
     bannerText: sim.banner.text,
     bannerSub: sim.banner.sub,
@@ -147,6 +155,7 @@ export function tick(sim: Sim, dt: number) {
   updateWorkers(sim, dt)
   updateProcessors(sim, dt)
   updateBelts(sim, dt)
+  updateFreight(sim, dt)
   updateCaravan(sim, dt)
   updateEconomy(sim, dt)
   updateRush(sim, dt)

@@ -2,7 +2,7 @@
 // conveyor belts all move items between a Source and a Sink, so a new chain
 // only has to name its endpoints.
 
-import type { Sim, ResKind, V2, V3, ProcessorSim, StationId, DepotSim } from '../types'
+import type { Sim, ResKind, V2, V3, ProcessorSim, StationId, DepotSim, TerminalSim } from '../types'
 
 /** Somewhere items are loaded from: a workshop's output table or a depot pile. */
 export interface Source {
@@ -28,11 +28,29 @@ export interface Sink {
 }
 
 export function procSource(pr: ProcessorSim): Source {
-  return { at: pr.outZone, kind: pr.outKind, open: pr.unlocked, count: pr.outCount, take: () => pr.outCount-- }
+  return {
+    at: pr.outZone,
+    kind: pr.outKind,
+    open: pr.unlocked,
+    count: pr.outCount,
+    take: () => {
+      pr.outCount--
+      pr.taken = (pr.taken ?? 0) + 1
+    },
+  }
 }
 
 export function depotSource(d: DepotSim): Source {
-  return { at: d.pos, kind: d.kind, open: true, count: d.count, take: () => d.count-- }
+  return {
+    at: d.pos,
+    kind: d.kind,
+    open: true,
+    count: d.count,
+    take: () => {
+      d.count--
+      d.taken = (d.taken ?? 0) + 1
+    },
+  }
 }
 
 export function stationSink(sim: Sim, id: StationId): Sink {
@@ -86,5 +104,19 @@ export function depotSink(d: DepotSim, label: string): Sink {
     put: () => d.count++,
     label,
     full: `${label.replace(/^stacking /, '')} pile full!`,
+  }
+}
+
+/** an Industrial Park terminal's stock of one product */
+export function terminalSink(t: TerminalSim, kind: ResKind): Sink {
+  return {
+    at: t.restock,
+    to: { x: t.pos.x, y: 1.0, z: t.pos.z },
+    open: t.open,
+    count: t.stock[kind] ?? 0,
+    cap: t.cap,
+    put: () => (t.stock[kind] = (t.stock[kind] ?? 0) + 1),
+    label: `stocking the ${t.id}`,
+    full: `${t.id} full!`,
   }
 }

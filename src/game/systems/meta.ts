@@ -144,7 +144,8 @@ export function claimOffline(sim: Sim, double: boolean) {
   sim.money += amount
   sim.offline = null
   const p = sim.player.pos
-  for (let i = 0; i < 8; i++) sim.fx.push({ t: 'coin', x: p.x + (Math.random() - 0.5) * 1.5, y: 2.4, z: p.z + (Math.random() - 0.5) * 1.5 })
+  for (let i = 0; i < 8; i++)
+    sim.fx.push({ t: 'coin', x: p.x + (Math.random() - 0.5) * 1.5, y: 2.4, z: p.z + (Math.random() - 0.5) * 1.5 })
   sim.fx.push({ t: 'burst', x: p.x, y: 2, z: p.z, color: '#ffe680', n: 24, spread: 1.6, up: 4 })
   banner(sim, `❄️ +$${fmt(amount)} collected`, mult === 2 ? 'Doubled! Come back tomorrow for another ×2' : '', 'good')
   sfx.combo()

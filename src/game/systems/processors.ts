@@ -1,8 +1,9 @@
 // Workshops (kitchen: raw -> cooked, tailor: hide -> coat, smokehouse: fish -> smoked). Work only runs
-// while someone stands at the work spot: the hired staff or the player.
+// while someone stands at the work spot: the hired staff or the player. Industrial Park factories
+// run on their own.
 
 import type { Sim } from '../types'
-import { PROC_IDS, PLAYER } from '../balance'
+import { PROC_IDS, PLAYER, FACTORY_IDS } from '../balance'
 import { dist } from '../util'
 import { sfx } from '../audio'
 import { machineStaffs } from './belts'
@@ -15,13 +16,14 @@ export function updateProcessors(sim: Sim, dt: number) {
       continue
     }
     const playerHere = dist(sim.player.pos, pr.workSpot) < PLAYER.workRange
-    const staffed = pr.staffed || playerHere || machineStaffs(sim, id)
+    const factory = (FACTORY_IDS as string[]).includes(id)
+    const staffed = factory || pr.staffed || playerHere || machineStaffs(sim, id)
 
     if (staffed && pr.inCount > 0 && pr.outCount < pr.outCap) {
       pr.active = true
       pr.t += dt
       if (id === 'tailor') sfx.stitch()
-      else sfx.sizzle()
+      else if (!factory) sfx.sizzle()
       if (pr.t >= pr.time) {
         pr.t = 0
         pr.inCount--
@@ -34,8 +36,29 @@ export function updateProcessors(sim: Sim, dt: number) {
         })
         if (id === 'tailor') {
           sim.fx.push({ t: 'burst', x: pr.pos.x, y: 1.1, z: pr.pos.z, color: '#d9b8ff', n: 6, spread: 0.5 })
+        } else if (factory && Math.random() < 0.35) {
+          // steam puffs off the factory roof
+          sim.fx.push({
+            t: 'burst',
+            x: pr.pos.x + 1.4,
+            y: 4.4,
+            z: pr.pos.z - 0.6,
+            color: '#e6ebf2',
+            n: 3,
+            spread: 0.3,
+            up: 2.4,
+          })
         } else if (id === 'smokehouse') {
-          sim.fx.push({ t: 'burst', x: pr.pos.x, y: 2.6, z: pr.pos.z - 0.3, color: '#c9cfd8', n: 4, spread: 0.4, up: 2 })
+          sim.fx.push({
+            t: 'burst',
+            x: pr.pos.x,
+            y: 2.6,
+            z: pr.pos.z - 0.3,
+            color: '#c9cfd8',
+            n: 4,
+            spread: 0.4,
+            up: 2,
+          })
         }
       }
     } else {

@@ -78,6 +78,31 @@ function Caravan() {
   )
 }
 
+/** the docked ship / parked plane's orders in one small pill, only while you're in the Industrial Park */
+function FreightOrders() {
+  const inPark = useUI((s) => s.inPark)
+  const shipText = useUI((s) => s.shipText)
+  const shipTime = useUI((s) => s.shipTime)
+  const planeText = useUI((s) => s.planeText)
+  const planeTime = useUI((s) => s.planeTime)
+  if (!inPark || (!shipText && !planeText)) return null
+  const urgent = (shipText && shipTime <= 10) || (planeText && planeTime <= 10)
+  return (
+    <div className={`hud-freight${urgent ? ' urgent' : ''}`}>
+      {shipText && (
+        <span>
+          🚢 {shipTime}s <b>{shipText}</b>
+        </span>
+      )}
+      {planeText && (
+        <span>
+          ✈️ {planeTime}s <b>{planeText}</b>
+        </span>
+      )}
+    </div>
+  )
+}
+
 function Clock() {
   const on = useUI((s) => s.clockOn)
   const night = useUI((s) => s.night)
@@ -218,7 +243,10 @@ function Tasks() {
       {tasks.map((t) => (
         <div key={t.id} className={`hud-task${t.done ? ' done' : ''}`}>
           <div className="hud-task-row">
-            <span className="hud-task-text">{t.done ? '✅ ' : ''}{t.text}</span>
+            <span className="hud-task-text">
+              {t.done ? '✅ ' : ''}
+              {t.text}
+            </span>
             <span className="hud-task-reward">{t.reward}</span>
           </div>
           <div className="bar">
@@ -277,7 +305,10 @@ function Shop() {
                 <span className="hud-perk-icon">{def.icon}</span>
                 <div className="hud-perk-info">
                   <div className="hud-perk-name">
-                    {def.name} <small>{lvl}/{def.costs.length}</small>
+                    {def.name}{' '}
+                    <small>
+                      {lvl}/{def.costs.length}
+                    </small>
                   </div>
                   <div className="hud-perk-desc">{locked ? `Needs ${PERKS[def.requires!].name}` : def.desc}</div>
                 </div>
@@ -313,7 +344,9 @@ function PanelButton({ id, icon, badge }: { id: 'alerts' | 'tasks' | 'shop'; ico
   return (
     <button
       className={`hud-btn${panel === id ? ' active' : ''}`}
-      onClick={() => set(panel === id ? { panel: '' } : { panel: id, ...(id === 'alerts' ? { seenNotice: latest } : {}) })}
+      onClick={() =>
+        set(panel === id ? { panel: '' } : { panel: id, ...(id === 'alerts' ? { seenNotice: latest } : {}) })
+      }
     >
       {icon}
       {badge ? <span className="hud-badge">{badge > 9 ? '9+' : badge}</span> : null}
@@ -356,6 +389,7 @@ export function HUD() {
         <div className={`hud-objective${flash ? ' flash' : ''}`}>{objective}</div>
         <Rush />
         <Caravan />
+        <FreightOrders />
         <EventPill />
       </div>
       <div className="hud-right">

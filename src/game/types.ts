@@ -13,18 +13,50 @@ export interface V3 {
 }
 
 /** Physical resource kinds that can be carried / stocked / dropped. */
-export type ResKind = 'log' | 'raw' | 'cooked' | 'hide' | 'coat' | 'fish' | 'smoked' | 'coal'
+export type ResKind =
+  | 'log'
+  | 'raw'
+  | 'cooked'
+  | 'hide'
+  | 'coat'
+  | 'fish'
+  | 'smoked'
+  | 'coal'
+  // Industrial Park products
+  | 'furniture'
+  | 'steel'
+  | 'jacket'
+  | 'canned'
 
 /** Market stalls customers queue at. A customer's need is a stall id. */
 export type StationId = 'wood' | 'meat' | 'coat' | 'fish'
 export type Need = StationId
 
 /** Workshops that turn one resource into another. */
-export type ProcessorId = 'kitchen' | 'tailor' | 'smokehouse'
+export type ProcessorId = WorkshopId | FactoryId
 
-export type PileId = 'woodPay' | 'meatPay' | 'coatPay' | 'fishPay' | 'caravanPay' | 'bountyPay' | 'heatPay'
+/** the camp's staffed workshops */
+export type WorkshopId = 'kitchen' | 'tailor' | 'smokehouse'
 
-export type ZoneId = 'tannery' | 'fishery' | 'mine'
+/** Industrial Park factories: automated workshops fed by export belts from the camp. */
+export type FactoryId = 'furnFactory' | 'steelMill' | 'fashion' | 'cannery'
+
+/** Industrial Park terminals where vehicles pick up products. */
+export type TerminalId = 'dock' | 'port' | 'air'
+
+export type PileId =
+  | 'woodPay'
+  | 'meatPay'
+  | 'coatPay'
+  | 'fishPay'
+  | 'caravanPay'
+  | 'bountyPay'
+  | 'heatPay'
+  | 'dockPay'
+  | 'portPay'
+  | 'airPay'
+
+export type ZoneId = 'tannery' | 'fishery' | 'mine' | 'industry'
 
 /** Gatherable spots: pines (logs), ice-fishing holes (fish), coal seams (coal). */
 export type NodeKind = 'tree' | 'hole' | 'seam'
@@ -32,7 +64,12 @@ export type NodeKind = 'tree' | 'hole' | 'seam'
 /** Conveyor belts: each one carries a single resource from a source to a sink. */
 export type PadBeltId = 'wood' | 'meat' | 'coat' | 'fish' | 'coal'
 /** pad-bought belts plus the belts that come with each machine */
-export type BeltId = PadBeltId | 'saw' | 'skinRaw' | 'skinHide' | 'auger' | 'drill'
+export type BeltId = PadBeltId | 'saw' | 'skinRaw' | 'skinHide' | 'auger' | 'drill' | ExportBeltId | ProductBeltId
+
+/** overhead export lines: camp supplies -> Industrial Park factories */
+export type ExportBeltId = 'exLog' | 'exCoal' | 'exCoat' | 'exFish'
+/** floor belts inside the park: factory -> terminal */
+export type ProductBeltId = 'pFurn' | 'pSteel' | 'pJacket' | 'pCanned'
 
 /** Machines that do a worker's job: gatherers, the meadow skinner, and workshop automatons. */
 export type MachineId = 'saw' | 'skinner' | 'auger' | 'drill' | 'grill' | 'sewer' | 'autosmoker'
@@ -111,6 +148,8 @@ export interface ProcessorSim {
   active: boolean
   /** a hired worker is standing at the work spot this frame */
   staffed: boolean
+  /** items taken off the output table by haulers and belts (drives export belt shares) */
+  taken?: number
 }
 
 export interface TreeSim {
@@ -134,16 +173,7 @@ export type EventId = 'blizzard' | 'festival' | 'goldRush' | 'siege' | 'boss'
 
 /** Frost Star shop perks (bought with unspent stars, kept forever) */
 export type PerkId =
-  | 'headstart'
-  | 'crew'
-  | 'startLevel'
-  | 'vip'
-  | 'tips'
-  | 'belts'
-  | 'arrows'
-  | 'offline'
-  | 'events'
-  | 'bossLoot'
+  'headstart' | 'crew' | 'startLevel' | 'vip' | 'tips' | 'belts' | 'arrows' | 'offline' | 'events' | 'bossLoot'
 
 export interface AnimalSim {
   id: number
@@ -426,6 +456,8 @@ export interface DepotSim {
   count: number
   cap: number
   kind: ResKind
+  /** items hauled off it so far (drives export belt shares) */
+  taken?: number
 }
 
 export interface BeltSim {
@@ -443,14 +475,26 @@ export interface BeltSim {
   blockedT: number
   /** delivered this frame (drives the end-of-belt squash) */
   pulse: number
+  /** overhead belts (export lines): riding height, the climb at each end and the flat run (0 = floor belt) */
+  h: number
+  lift: number
+  run: number
 }
 
+/** a stall's cash belt, or one of the stall-less pay piles (furnace heat, wolf bounties) */
+export type CashBeltId = StationId | 'heat' | 'bounty' | TerminalId
+
 /**
- * Elevated money belt from a stall's cash pile to the chest: bundles lift off
- * the pile, ride overhead and drop into storage, so nobody walks the cash.
+ * Elevated money belt from a pay pile to the chest: bundles lift off the
+ * pile, ride overhead and drop into storage, so nobody walks the cash.
  */
 export interface CashBeltSim {
-  station: StationId
+  id: CashBeltId
+  pile: PileId
+  /** height the bundles ride at (the long belts cross over the others) */
+  h: number
+  /** vertical climb off the pile (and drop into the chest) */
+  lift: number
   /** ground path, pile -> chest intake (items ride above it) */
   path: V2[]
   dists: number[]
@@ -494,7 +538,8 @@ export interface FurnaceSim {
   burning: boolean
 }
 
-export type TaskKind = 'serve' | 'kills' | 'bears' | 'earn' | 'tips' | 'caravan' | 'coal' | 'buy' | 'rush'
+export type TaskKind =
+  'serve' | 'kills' | 'bears' | 'earn' | 'tips' | 'caravan' | 'coal' | 'buy' | 'rush' | 'trucks' | 'ships' | 'planes'
 
 /** A rotating bounty-board goal: progress is a stat counted from when it was posted. */
 export interface TaskSim {
@@ -508,6 +553,75 @@ export interface TaskSim {
   xp: number
   /** seconds since completion (-1 while open); paid out, then replaced */
   doneT: number
+}
+
+/** a vehicle customer's order line */
+export interface FreightLine {
+  kind: ResKind
+  need: number
+  got: number
+}
+
+/** Where vehicles collect products: stock per product it ships. */
+export interface TerminalSim {
+  id: TerminalId
+  open: boolean
+  pos: V2
+  /** where products are dropped off (player or belt) */
+  restock: V2
+  kinds: ResKind[]
+  stock: Partial<Record<ResKind, number>>
+  cap: number
+  level: number
+  /** seconds per item loaded onto a vehicle */
+  loadTime: number
+  pile: PileId
+}
+
+export type VehicleKind = 'truck' | 'ship' | 'plane'
+export type VehicleState = 'arrive' | 'queue' | 'load' | 'leave'
+
+/** a waypoint on a vehicle's route: position (y = altitude for planes) and the speed to drive it at */
+export interface RoutePt {
+  x: number
+  y: number
+  z: number
+  v: number
+}
+
+export interface VehicleSim {
+  id: number
+  kind: VehicleKind
+  state: VehicleState
+  /** seconds in the current state (trucks: time waiting at the bay with nothing to load) */
+  t: number
+  /** trucks: queue slot (0 = at the bay) */
+  slot: number
+  pos: V2
+  /** altitude (planes) */
+  y: number
+  yaw: number
+  /** waypoints being driven ('arrive' for ships/planes, 'leave' for all); seg = index of the next one */
+  route: RoutePt[]
+  seg: number
+  order: FreightLine[]
+  loadT: number
+  /** seconds left to fill the order (ships + planes) */
+  timer: number
+  maxTimer: number
+  /** paint variant */
+  variant: number
+}
+
+export interface FreightSim {
+  vehicles: VehicleSim[]
+  truckT: number
+  shipT: number
+  planeT: number
+  /** completed vehicles (scales order sizes) */
+  trucks: number
+  ships: number
+  planes: number
 }
 
 export interface MetaSim {
@@ -547,6 +661,10 @@ export interface Stats extends StatsExtra {
   wolvesKilled: number
   caravansDone: number
   caravanVisits: number
+  trucksDone: number
+  shipsDone: number
+  planesDone: number
+  freightEarned: number
 }
 
 export interface Sim {
@@ -583,7 +701,7 @@ export interface Sim {
   belts: Record<BeltId, BeltSim>
   machines: Record<MachineId, MachineSim>
   /** cash belts share one level (0 = not built) */
-  cash: { level: number; belts: Record<StationId, CashBeltSim>; fxAcc: number; fxT: number }
+  cash: { level: number; belts: Record<CashBeltId, CashBeltSim>; fxAcc: number; fxT: number }
   furnace: FurnaceSim
   stats: Stats
   fx: Fx[]
@@ -623,6 +741,9 @@ export interface Sim {
   event: EventSim | null
   eventNext: number
   loot: LootSim[]
+  /** Industrial Park: terminals + vehicle customers */
+  terminals: Record<TerminalId, TerminalSim>
+  freight: FreightSim
   /** > 0 while packing up for a new settlement (seconds left before the reload) */
   moving: number
   movingStars: number

@@ -34,7 +34,12 @@ export const lanternMat = new THREE.MeshStandardMaterial({
   emissive: '#ffb347',
   emissiveIntensity: 0.2,
 })
-const slotDotMat = new THREE.MeshBasicMaterial({ color: '#8fa3bd', transparent: true, opacity: 0.28, depthWrite: false })
+const slotDotMat = new THREE.MeshBasicMaterial({
+  color: '#8fa3bd',
+  transparent: true,
+  opacity: 0.28,
+  depthWrite: false,
+})
 const flagColors = ['#c0563f', '#e8c04a', '#4fa06a', '#3e6fd1']
 const flagMats = flagColors.map((c) => new THREE.MeshStandardMaterial({ color: c, side: THREE.DoubleSide }))
 
@@ -54,7 +59,11 @@ function makeStockGrid(id: StationId): { grid: ItemGrid; y: number; z: number } 
     case 'coat':
       return { grid: new ItemGrid(coatGeo(), vertexColorMat, 40, gridLayout(4, 2, 0.62, 0.42, 0.15)), y: 1.03, z: 0 }
     case 'fish':
-      return { grid: new ItemGrid(smokedFishGeo(), vertexColorMat, 48, gridLayout(3, 2, 0.8, 0.42, 0.14)), y: 1.03, z: 0 }
+      return {
+        grid: new ItemGrid(smokedFishGeo(), vertexColorMat, 48, gridLayout(3, 2, 0.8, 0.42, 0.14)),
+        y: 1.03,
+        z: 0,
+      }
   }
 }
 
@@ -116,7 +125,12 @@ function buildStall(id: StationId, withLight: boolean): Stall {
   root.add(stockGrid.grid.mesh)
 
   // restock zone marker
-  const zoneMat = new THREE.MeshBasicMaterial({ color: style.zoneColor, transparent: true, opacity: 0.4, depthWrite: false })
+  const zoneMat = new THREE.MeshBasicMaterial({
+    color: style.zoneColor,
+    transparent: true,
+    opacity: 0.4,
+    depthWrite: false,
+  })
   const zone = new THREE.Mesh(new THREE.RingGeometry(0.72, 0.95, 24), zoneMat)
   zone.rotation.x = -Math.PI / 2
   zone.position.set(st.restock.x - st.pos.x, 0.02, st.restock.z - st.pos.z)

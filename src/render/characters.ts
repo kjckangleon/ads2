@@ -149,6 +149,84 @@ export function coatGeo(): THREE.BufferGeometry {
   return coatGeoCache
 }
 
+// ---------- Industrial Park products ----------
+
+let furnGeoCache: THREE.BufferGeometry | null = null
+/** a little wooden dresser with brass knobs */
+export function furnitureGeo(): THREE.BufferGeometry {
+  if (furnGeoCache) return furnGeoCache
+  const parts: THREE.BufferGeometry[] = []
+  const body = new THREE.BoxGeometry(0.5, 0.3, 0.36)
+  parts.push(colorGeo(body, '#c58b52'))
+  const top = new THREE.BoxGeometry(0.54, 0.04, 0.4)
+  top.translate(0, 0.17, 0)
+  parts.push(colorGeo(top, '#9a6436'))
+  for (const y of [-0.06, 0.07]) {
+    const drawer = new THREE.BoxGeometry(0.44, 0.1, 0.02)
+    drawer.translate(0, y, 0.185)
+    parts.push(colorGeo(drawer, '#d9a46a'))
+    const knob = new THREE.BoxGeometry(0.05, 0.03, 0.03)
+    knob.translate(0, y, 0.2)
+    parts.push(colorGeo(knob, '#e8c04a'))
+  }
+  furnGeoCache = mergeGeometries(parts)!
+  return furnGeoCache
+}
+
+let steelGeoCache: THREE.BufferGeometry | null = null
+/** a short steel I-beam */
+export function steelGeo(): THREE.BufferGeometry {
+  if (steelGeoCache) return steelGeoCache
+  const parts: THREE.BufferGeometry[] = []
+  for (const y of [-0.06, 0.06]) {
+    const flange = new THREE.BoxGeometry(0.62, 0.025, 0.2)
+    flange.translate(0, y, 0)
+    parts.push(colorGeo(flange, '#9aa6b4'))
+  }
+  const web = new THREE.BoxGeometry(0.62, 0.11, 0.04)
+  parts.push(colorGeo(web, '#7d8896'))
+  steelGeoCache = mergeGeometries(parts)!
+  return steelGeoCache
+}
+
+let jacketGeoCache: THREE.BufferGeometry | null = null
+/** a puffy designer jacket: quilted bands and a silver zip */
+export function jacketGeo(): THREE.BufferGeometry {
+  if (jacketGeoCache) return jacketGeoCache
+  const parts: THREE.BufferGeometry[] = []
+  const body = new THREE.BoxGeometry(0.5, 0.15, 0.38)
+  parts.push(colorGeo(body, '#2f6fd6'))
+  for (const z of [-0.12, 0, 0.12]) {
+    const band = new THREE.BoxGeometry(0.52, 0.04, 0.05)
+    band.translate(0, 0.07, z)
+    parts.push(colorGeo(band, '#4a8cf0'))
+  }
+  const zip = new THREE.BoxGeometry(0.03, 0.02, 0.36)
+  zip.translate(0, 0.095, 0)
+  parts.push(colorGeo(zip, '#e6ebf2'))
+  const hood = new THREE.BoxGeometry(0.3, 0.08, 0.1)
+  hood.translate(0, 0.08, -0.17)
+  parts.push(colorGeo(hood, '#f2c94c'))
+  jacketGeoCache = mergeGeometries(parts)!
+  return jacketGeoCache
+}
+
+let cannedGeoCache: THREE.BufferGeometry | null = null
+/** a tin of fish with a red label */
+export function cannedGeo(): THREE.BufferGeometry {
+  if (cannedGeoCache) return cannedGeoCache
+  const parts: THREE.BufferGeometry[] = []
+  const tin = new THREE.CylinderGeometry(0.13, 0.13, 0.22, 12)
+  parts.push(colorGeo(tin, '#c9d2dc'))
+  const label = new THREE.CylinderGeometry(0.135, 0.135, 0.12, 12)
+  parts.push(colorGeo(label, '#d8463a'))
+  const lid = new THREE.CylinderGeometry(0.1, 0.1, 0.01, 12)
+  lid.translate(0, 0.115, 0)
+  parts.push(colorGeo(lid, '#e8edf2'))
+  cannedGeoCache = mergeGeometries(parts)!
+  return cannedGeoCache
+}
+
 let fishGeoCache: THREE.BufferGeometry | null = null
 let smokedGeoCache: THREE.BufferGeometry | null = null
 /** chunky fish: body, tail fin, eye — silver raw, golden-brown smoked */
@@ -180,7 +258,12 @@ export function smokedFishGeo(): THREE.BufferGeometry {
 
 const coalGeo = new THREE.IcosahedronGeometry(0.17, 0)
 coalGeo.scale(1.2, 0.85, 1)
-export const coalMat = new THREE.MeshStandardMaterial({ color: '#26262c', roughness: 0.55, metalness: 0.25, flatShading: true })
+export const coalMat = new THREE.MeshStandardMaterial({
+  color: '#26262c',
+  roughness: 0.55,
+  metalness: 0.25,
+  flatShading: true,
+})
 
 export function makeCarryItem(kind: ResKind): THREE.Mesh {
   switch (kind) {
@@ -200,10 +283,31 @@ export function makeCarryItem(kind: ResKind): THREE.Mesh {
       return new THREE.Mesh(smokedFishGeo(), vertexColorMat)
     case 'coal':
       return new THREE.Mesh(coalGeo, coalMat)
+    case 'furniture':
+      return new THREE.Mesh(furnitureGeo(), vertexColorMat)
+    case 'steel':
+      return new THREE.Mesh(steelGeo(), vertexColorMat)
+    case 'jacket':
+      return new THREE.Mesh(jacketGeo(), vertexColorMat)
+    case 'canned':
+      return new THREE.Mesh(cannedGeo(), vertexColorMat)
   }
 }
 
-export const KIND_ORDER: ResKind[] = ['log', 'raw', 'cooked', 'hide', 'coat', 'fish', 'smoked', 'coal']
+export const KIND_ORDER: ResKind[] = [
+  'log',
+  'raw',
+  'cooked',
+  'hide',
+  'coat',
+  'fish',
+  'smoked',
+  'coal',
+  'furniture',
+  'steel',
+  'jacket',
+  'canned',
+]
 export const STACK_STEP: Record<ResKind, number> = {
   log: 0.24,
   raw: 0.22,
@@ -213,6 +317,10 @@ export const STACK_STEP: Record<ResKind, number> = {
   fish: 0.2,
   smoked: 0.2,
   coal: 0.26,
+  furniture: 0.34,
+  steel: 0.15,
+  jacket: 0.17,
+  canned: 0.24,
 }
 
 export function kindIndex(k: ResKind) {
@@ -586,7 +694,13 @@ const yetiLegMat = new THREE.MeshStandardMaterial({ color: '#dfe6ee', roughness:
 /** body geometry, leg mesh + spots, leg hip height, shadow size per animal */
 const RIG: Record<
   'deer' | 'rabbit' | 'goat' | 'bear' | 'mammoth' | 'yeti',
-  { body: () => THREE.BufferGeometry; leg?: [THREE.BufferGeometry, THREE.Material]; legs: number[][]; hip: number; shadow: number }
+  {
+    body: () => THREE.BufferGeometry
+    leg?: [THREE.BufferGeometry, THREE.Material]
+    legs: number[][]
+    hip: number
+    shadow: number
+  }
 > = {
   mammoth: {
     body: () => mammothBodyGeo(),

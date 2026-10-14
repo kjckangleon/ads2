@@ -4,17 +4,7 @@
 // drops a treasure chest. Loot on the ground is picked up here too.
 
 import type { Sim, EventId, BossKind, AnimalSim } from '../types'
-import {
-  EVENTS,
-  EVENT_INFO,
-  BOSS,
-  WORLD,
-  PLAYER,
-  levelGift,
-  towerDps,
-  wolfCount,
-  xpForLevel,
-} from '../balance'
+import { EVENTS, EVENT_INFO, BOSS, WORLD, PLAYER, levelGift, towerDps, wolfCount, xpForLevel } from '../balance'
 import { fmt } from '../format'
 import { sfx } from '../audio'
 import { dist } from '../util'
@@ -85,7 +75,8 @@ export function startEvent(sim: Sim, id: EventId) {
 function endEvent(sim: Sim) {
   const ev = sim.event
   if (!ev) return
-  if (ev.id === 'goldRush' && ev.grabbed > 0) banner(sim, `💰 Gold Rush over`, `You grabbed $${fmt(ev.grabbed)}`, 'good')
+  if (ev.id === 'goldRush' && ev.grabbed > 0)
+    banner(sim, `💰 Gold Rush over`, `You grabbed $${fmt(ev.grabbed)}`, 'good')
   if (ev.id === 'siege') {
     // whoever is left of the pack runs for the woods
     for (const w of sim.wolves) if (w.siege) w.siege = false
@@ -160,7 +151,15 @@ function updateLoot(sim: Sim, dt: number) {
       sim.money += l.value
       sim.stats.collected += l.value
       if (sim.event?.id === 'goldRush' && l.kind === 'cash') sim.event.grabbed += l.value
-      sim.fx.push({ t: 'text', x: l.pos.x, y: 1.8, z: l.pos.z, str: `+$${fmt(l.value)}`, color: '#b8ff9a', size: l.kind === 'chest' ? 1.4 : 0.9 })
+      sim.fx.push({
+        t: 'text',
+        x: l.pos.x,
+        y: 1.8,
+        z: l.pos.z,
+        str: `+$${fmt(l.value)}`,
+        color: '#b8ff9a',
+        size: l.kind === 'chest' ? 1.4 : 0.9,
+      })
       for (let k = 0; k < (l.kind === 'chest' ? 10 : 2); k++) {
         sim.fx.push({ t: 'coin', x: l.pos.x + (Math.random() - 0.5), y: 0.8, z: l.pos.z + (Math.random() - 0.5) })
       }
@@ -199,7 +198,14 @@ export function updateEvents(sim: Sim, dt: number) {
       const ang = Math.random() * Math.PI * 2
       const r = 3 + Math.random() * EVENTS.goldRadius
       const value = Math.max(25, Math.round(levelGift(sim.rep.level) * EVENTS.goldShare))
-      sim.loot.push({ id: sim.ids++, kind: 'cash', pos: { x: c.x + Math.cos(ang) * r, z: c.z + 4 + Math.sin(ang) * r }, value, age: 0, ttl: EVENTS.goldTtl })
+      sim.loot.push({
+        id: sim.ids++,
+        kind: 'cash',
+        pos: { x: c.x + Math.cos(ang) * r, z: c.z + 4 + Math.sin(ang) * r },
+        value,
+        age: 0,
+        ttl: EVENTS.goldTtl,
+      })
     }
   }
   if (ev.id === 'siege' && !sim.wolves.some((w) => w.siege)) ev.t = 0

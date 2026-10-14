@@ -6,7 +6,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { sim } from '../game/state'
-import type { ProcessorId } from '../game/types'
+import type { WorkshopId as ProcessorId } from '../game/types'
 import { TextLabel, makeEmojiSprite, vertexColorMat, mergeStatic } from './rutil'
 import { FireEffect } from './Environment'
 import { hideGeo, coatGeo, fishGeo, smokedFishGeo, rawMeatMat, cookedMeatMat, makeBar, setBar } from './characters'
@@ -15,7 +15,10 @@ import { PopIn } from './anim'
 import { capText } from '../game/balance'
 import { machineStaffs } from '../game/systems/belts'
 
-const STYLE: Record<ProcessorId, { sign: string; inIcon: string; outIcon: string; workIcon: string; ring: string; bar: string }> = {
+const STYLE: Record<
+  ProcessorId,
+  { sign: string; inIcon: string; outIcon: string; workIcon: string; ring: string; bar: string }
+> = {
   kitchen: { sign: '🍳', inIcon: '🥩', outIcon: '🍗', workIcon: '👨‍🍳', ring: '#ffb060', bar: '#ffab4a' },
   tailor: { sign: '🧵', inIcon: '🐾', outIcon: '🧥', workIcon: '🧵', ring: '#c9a0ff', bar: '#c9a0ff' },
   smokehouse: { sign: '🔥', inIcon: '🐟', outIcon: '🍣', workIcon: '🔥', ring: '#ffb060', bar: '#e0a860' },
@@ -34,7 +37,8 @@ meatGeo.scale(1.3, 0.72, 1)
 
 /** exact table piles: meat in 3×3 layers, hides / coats in 2×2 layers */
 function tableGrid(id: ProcessorId, output: boolean): ItemGrid {
-  if (id === 'kitchen') return new ItemGrid(meatGeo, output ? cookedMeatMat : rawMeatMat, 45, gridLayout(3, 3, 0.36, 0.34, 0.17))
+  if (id === 'kitchen')
+    return new ItemGrid(meatGeo, output ? cookedMeatMat : rawMeatMat, 45, gridLayout(3, 3, 0.36, 0.34, 0.17))
   if (id === 'smokehouse') {
     return new ItemGrid(output ? smokedFishGeo() : fishGeo(), vertexColorMat, 45, gridLayout(1, 3, 0.5, 0.34, 0.15))
   }
@@ -168,7 +172,11 @@ function ProcessorView({ id }: { id: ProcessorId }) {
     const root = new THREE.Group()
     root.position.set(pr.pos.x, 0, pr.pos.z)
     const center =
-      id === 'kitchen' ? buildKitchenCenter(root) : id === 'tailor' ? buildTailorCenter(root) : buildSmokehouseCenter(root)
+      id === 'kitchen'
+        ? buildKitchenCenter(root)
+        : id === 'tailor'
+          ? buildTailorCenter(root)
+          : buildSmokehouseCenter(root)
 
     const signPost = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 2.4, 7), postMat)
     signPost.position.set(id === 'tailor' ? 1.15 : id === 'smokehouse' ? -1.15 : 0, 1.2, -1.4)

@@ -2,7 +2,18 @@
 // Upgrade pads marked `gated` stop at the settlement-level cap and show a
 // lock until the settlement grows.
 
-import type { Sim, PadSim, StationId, ProcessorId, WorkerRole, PadBeltId, MachineId } from '../types'
+import type {
+  Sim,
+  PadSim,
+  StationId,
+  ProcessorId,
+  WorkerRole,
+  PadBeltId,
+  MachineId,
+  BeltId,
+  TerminalId,
+  FactoryId,
+} from '../types'
 import {
   PAD_BY_ID,
   padCost,
@@ -25,6 +36,10 @@ import {
   BELT_RETIRES,
   MACHINE_IDS,
   MACHINE_CFG,
+  PARK,
+  TERMINAL_CFG,
+  terminalCap,
+  terminalLoadTime,
 } from '../balance'
 import { dist } from '../util'
 import { sfx, haptic } from '../audio'
@@ -130,6 +145,31 @@ function padVisible(sim: Sim, pad: PadSim): boolean {
     // prestige opens once the whole map is built (the Coal Mine is the last district)
     case 'prestige':
       return sim.zones.mine
+    // ---- Industrial Park ----
+    case 'zone_industry':
+      return !sim.zones.industry && sim.zones.mine && sim.rep.level >= PARK.industryLevel
+    case 'ex_log':
+    case 'pb_furn':
+    case 'furn_up':
+    case 'dock_up':
+      return sim.zones.industry
+    case 'zone_port':
+      return sim.zones.industry && !sim.terminals.port.open && sim.rep.level >= PARK.portLevel
+    case 'ex_coal':
+    case 'pb_steel':
+    case 'steel_up':
+    case 'port_up':
+      return sim.terminals.port.open
+    case 'zone_airport':
+      return sim.terminals.port.open && !sim.terminals.air.open && sim.rep.level >= PARK.airportLevel
+    case 'ex_coat':
+    case 'ex_fish':
+    case 'pb_jacket':
+    case 'pb_canned':
+    case 'fashion_up':
+    case 'cannery_up':
+    case 'air_up':
+      return sim.terminals.air.open
     default:
       return false
   }
@@ -195,6 +235,13 @@ function padPreview(sim: Sim, pad: PadSim): string | null {
       return sim.proc.kitchen.unlocked ? `Needs ⭐ Level ${REP.beltLevel}` : null
     case 'belt_coat':
       return sim.zones.tannery ? `Needs ⭐ Level ${REP.beltLevel}` : null
+    // the next park stage shows what level it needs
+    case 'zone_industry':
+      return sim.zones.mine && !sim.zones.industry ? `Needs ⭐ Level ${PARK.industryLevel}` : null
+    case 'zone_port':
+      return sim.zones.industry && !sim.terminals.port.open ? `Needs ⭐ Level ${PARK.portLevel}` : null
+    case 'zone_airport':
+      return sim.terminals.port.open && !sim.terminals.air.open ? `Needs ⭐ Level ${PARK.airportLevel}` : null
     default:
       return null
   }
@@ -208,8 +255,19 @@ function upgradeStation(sim: Sim, id: StationId) {
   st.serviceTime = stationServiceTime(id, st.level)
   sim.fx.push({ t: 'burst', x: st.pos.x, y: 1.2, z: st.pos.z, color: '#b0e0ff', n: 14, spread: 1.2 })
   sim.fx.push({ t: 'shake', power: 0.25 })
-  if (st.capacity === UNLIMITED) banner(sim, '♾️ Unlimited storage!', 'This stall is maxed: drop off as much as you carry', 'good')
+  if (st.capacity === UNLIMITED)
+    banner(sim, '♾️ Unlimited storage!', 'This stall is maxed: drop off as much as you carry', 'good')
   sfx.build()
+}
+
+const PROC_NAME: Record<ProcessorId, string> = {
+  kitchen: 'kitchen',
+  tailor: 'tailor',
+  smokehouse: 'smokehouse',
+  furnFactory: 'Furniture Factory',
+  steelMill: 'Steel Mill',
+  fashion: 'Fashion House',
+  cannery: 'Cannery',
 }
 
 function upgradeProc(sim: Sim, id: ProcessorId) {
@@ -219,7 +277,8 @@ function upgradeProc(sim: Sim, id: ProcessorId) {
   pr.inCap = procInCap(id, pr.level)
   pr.outCap = procOutCap(id, pr.level)
   sim.fx.push({ t: 'burst', x: pr.pos.x, y: 1.2, z: pr.pos.z, color: '#ffc890', n: 14, spread: 1.2 })
-  if (pr.inCap === UNLIMITED) banner(sim, '♾️ Unlimited storage!', `The ${pr.id} is maxed: it takes everything you bring`, 'good')
+  if (pr.inCap === UNLIMITED)
+    banner(sim, '♾️ Unlimited storage!', `The ${PROC_NAME[id]} is maxed: it takes everything you bring`, 'good')
   sfx.build()
 }
 
@@ -259,7 +318,80 @@ function unlockMine(sim: Sim) {
   const fp = sim.furnace.pos
   sim.fx.push({ t: 'burst', x: fp.x, y: 1.4, z: fp.z, color: '#ffb35a', n: 30, spread: 2 })
   sim.fx.push({ t: 'shake', power: 0.6 })
-  banner(sim, '⛏️ The Coal Mine is open!', `Burn coal in the furnace: it sells heat and every sale +${Math.round(furnaceBonus(0) * 100)}%`, 'good')
+  banner(
+    sim,
+    '⛏️ The Coal Mine is open!',
+    `Burn coal in the furnace: it sells heat and every sale +${Math.round(furnaceBonus(0) * 100)}%`,
+    'good',
+  )
+  sfx.build()
+}
+
+const EXPORT_PADS: Record<string, BeltId> = {
+  ex_log: 'exLog',
+  ex_coal: 'exCoal',
+  ex_coat: 'exCoat',
+  ex_fish: 'exFish',
+  pb_furn: 'pFurn',
+  pb_steel: 'pSteel',
+  pb_jacket: 'pJacket',
+  pb_canned: 'pCanned',
+}
+const FACTORY_PADS: Record<string, FactoryId> = {
+  furn_up: 'furnFactory',
+  steel_up: 'steelMill',
+  fashion_up: 'fashion',
+  cannery_up: 'cannery',
+}
+const TERMINAL_PADS: Record<string, TerminalId> = { dock_up: 'dock', port_up: 'port', air_up: 'air' }
+
+/** open a park stage: its factories and terminal appear */
+export function openParkStage(sim: Sim, stage: 'industry' | 'port' | 'airport', quiet = false) {
+  const factories: FactoryId[] =
+    stage === 'industry' ? ['furnFactory'] : stage === 'port' ? ['steelMill'] : ['fashion', 'cannery']
+  const term: TerminalId = stage === 'industry' ? 'dock' : stage === 'port' ? 'port' : 'air'
+  if (stage === 'industry') sim.zones.industry = true
+  for (const id of factories) sim.proc[id].unlocked = true
+  sim.terminals[term].open = true
+  if (quiet) return
+  const at = stage === 'industry' ? { x: -12, z: 44 } : TERMINAL_CFG[term].pos
+  sim.focus = { x: at.x, z: at.z, t: 2.8 }
+  for (const id of factories) {
+    const p = sim.proc[id].pos
+    sim.fx.push({ t: 'burst', x: p.x, y: 2, z: p.z, color: '#cfe0ff', n: 30, spread: 2.4 })
+  }
+  sim.fx.push({ t: 'shake', power: 0.6 })
+  if (stage === 'industry')
+    banner(sim, '🏭 Industrial Park open!', 'Export logs to the Furniture Factory: trucks pay big', 'good')
+  else if (stage === 'port')
+    banner(sim, '🚢 The Port is open!', 'Export coal to the Steel Mill: cargo ships buy steel', 'good')
+  else banner(sim, '✈️ The Airport is open!', 'Coats become designer jackets, smoked fish gets canned', 'good')
+  sfx.build()
+}
+
+function upgradeTerminal(sim: Sim, id: TerminalId) {
+  const t = sim.terminals[id]
+  t.level++
+  t.cap = terminalCap(t.level)
+  t.loadTime = terminalLoadTime(t.level)
+  sim.fx.push({ t: 'burst', x: t.pos.x, y: 1.6, z: t.pos.z, color: '#b0e0ff', n: 16, spread: 1.6 })
+  if (t.cap === UNLIMITED) banner(sim, '♾️ Unlimited storage!', `The ${TERMINAL_CFG[id].name} is maxed`, 'good')
+  sfx.build()
+}
+
+function buildParkBelt(sim: Sim, id: BeltId, level: number) {
+  const b = sim.belts[id]
+  const first = b.level === 0
+  b.level = level
+  const mid = b.path[Math.floor(b.path.length / 2)]
+  sim.fx.push({ t: 'burst', x: mid.x, y: b.h || 0.6, z: mid.z, color: '#ffc890', n: 20, spread: 2 })
+  if (first) {
+    sim.focus = { x: mid.x, z: mid.z, t: 1.8 }
+    sim.fx.push({ t: 'shake', power: 0.3 })
+    if (b.h > 0)
+      banner(sim, '🚛 Export line running!', "It shares the camp's supply: upgrade for a bigger share", 'good')
+    else banner(sim, '⚙️ Product belt running!', 'Products ride to the terminal on their own', 'good')
+  }
   sfx.build()
 }
 
@@ -399,7 +531,7 @@ export function applyPad(sim: Sim, pad: PadSim) {
         retireWorkers(sim, 'cashier')
         sim.focus = { x: c.x, z: c.z + 2, t: 1.8 }
         sim.fx.push({ t: 'shake', power: 0.3 })
-        banner(sim, '💸 Cash belts running!', 'Every stall\'s cash rides straight into the chest', 'good')
+        banner(sim, '💸 Cash belts running!', "Every stall's cash rides straight into the chest", 'good')
       }
       sfx.build()
       break
@@ -452,6 +584,19 @@ export function applyPad(sim: Sim, pad: PadSim) {
     case 'zone_tannery':
       unlockTannery(sim)
       break
+    case 'zone_industry':
+      openParkStage(sim, 'industry')
+      break
+    case 'zone_port':
+      openParkStage(sim, 'port')
+      break
+    case 'zone_airport':
+      openParkStage(sim, 'airport')
+      break
+    default:
+      if (EXPORT_PADS[pad.id]) buildParkBelt(sim, EXPORT_PADS[pad.id], pad.level)
+      else if (FACTORY_PADS[pad.id]) upgradeProc(sim, FACTORY_PADS[pad.id])
+      else if (TERMINAL_PADS[pad.id]) upgradeTerminal(sim, TERMINAL_PADS[pad.id])
   }
 }
 
@@ -504,7 +649,15 @@ export function updateEconomy(sim: Sim, dt: number) {
     // moving the settlement costs nothing: a long hold is the confirmation
     if (pad.id === 'prestige') {
       if (pad.hold === 0) {
-        sim.fx.push({ t: 'text', x: pad.pos.x, y: 3, z: pad.pos.z, str: 'Stay to move: keep ❄️, start fresh', color: '#bfe6ff', size: 0.85 })
+        sim.fx.push({
+          t: 'text',
+          x: pad.pos.x,
+          y: 3,
+          z: pad.pos.z,
+          str: 'Stay to move: keep ❄️, start fresh',
+          color: '#bfe6ff',
+          size: 0.85,
+        })
       }
       pad.hold = Math.min(pad.hold + dt, pad.holdNeed)
       if (pad.hold >= pad.holdNeed) moveSettlement(sim)

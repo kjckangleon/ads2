@@ -232,6 +232,27 @@ canvas {
   background: #ff8a7a;
 }
 
+.hud-freight {
+  background: rgba(10, 40, 52, 0.72);
+  color: #bfefff;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  display: flex;
+  gap: 10px;
+  box-shadow: var(--shadow);
+}
+
+.hud-freight b {
+  color: #fff;
+  font-weight: 600;
+}
+
+.hud-freight.urgent {
+  color: #ffc0b4;
+}
+
 .hud-buttons {
   display: flex;
   gap: 8px;

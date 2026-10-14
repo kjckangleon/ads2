@@ -5,7 +5,7 @@
 import type { Sim, V2, ProcessorId, StationId, WorkerRole, TreeSim, PadSim, ResKind } from '../types'
 import { RES_ICON } from '../icons'
 import { fmt } from '../format'
-import { WORLD, REP, CARAVAN, BELT_IDS } from '../balance'
+import { WORLD, REP, CARAVAN, BELT_IDS, PARK } from '../balance'
 import { dist } from '../util'
 import { sfx } from '../audio'
 import { orderText } from './caravan'
@@ -132,19 +132,39 @@ export const OBJECTIVES: Objective[] = [
       return pile.value > 0 ? pile.pos : null
     },
   },
-  { text: '🪓 Hire a Lumberjack to chop for you', done: (s) => automated(s, 'lumberjack'), target: padPos('lumberjack') },
+  {
+    text: '🪓 Hire a Lumberjack to chop for you',
+    done: (s) => automated(s, 'lumberjack'),
+    target: padPos('lumberjack'),
+  },
   { text: '🍖 Build the Meat Stall (glowing pad)', done: (s) => s.stations.meat.unlocked, target: padPos('meatStall') },
-  { text: '🪵 Hire a Log Carrier — wood runs itself!', done: (s) => automated(s, 'logCarrier'), target: padPos('logCarrier') },
+  {
+    text: '🪵 Hire a Log Carrier — wood runs itself!',
+    done: (s) => automated(s, 'logCarrier'),
+    target: padPos('logCarrier'),
+  },
   {
     text: '🦌 Hunt deer (east), cook at the kitchen fire, stock the counter',
     done: (s) => s.stats.meatServed >= 3,
     target: (s) => chainTarget(s, 'kitchen', 'meat', 'runner'),
   },
   { text: '🍳 Hire a Cook — no more standing at the fire', done: (s) => automated(s, 'cook'), target: padPos('cook') },
-  { text: '🧺 Hire a Meat Collector to gather the kills', done: (s) => automated(s, 'collector'), target: padPos('collector') },
-  { text: '🏃 Hire a Food Runner to restock the counter', done: (s) => automated(s, 'runner'), target: padPos('runner') },
+  {
+    text: '🧺 Hire a Meat Collector to gather the kills',
+    done: (s) => automated(s, 'collector'),
+    target: padPos('collector'),
+  },
+  {
+    text: '🏃 Hire a Food Runner to restock the counter',
+    done: (s) => automated(s, 'runner'),
+    target: padPos('runner'),
+  },
   { text: '🏹 Build the Hunting Tower — it hunts for you', done: (s) => s.tower.built, target: padPos('tower') },
-  { text: '💰 Hire a Cash Collector to bank your cash', done: (s) => automated(s, 'cashier'), target: padPos('cashier') },
+  {
+    text: '💰 Hire a Cash Collector to bank your cash',
+    done: (s) => automated(s, 'cashier'),
+    target: padPos('cashier'),
+  },
   {
     text: (s) => `🔥 Never let a stall run dry — tips build a RUSH (${Math.min(s.rush.n, 10)}/10)`,
     done: (s) => s.rush.best >= 10,
@@ -199,7 +219,7 @@ export const OBJECTIVES: Objective[] = [
     text: (s) =>
       s.rep.level < REP.fisheryLevel
         ? `⭐ Reach Level ${REP.fisheryLevel} to open the Ice Fishery`
-        : padNeeds(s, 'zone_fishery') ?? '🎣 Open the Ice Fishery (northwest)',
+        : (padNeeds(s, 'zone_fishery') ?? '🎣 Open the Ice Fishery (northwest)'),
     done: (s) => s.zones.fishery,
     target: padPos('zone_fishery'),
   },
@@ -215,7 +235,7 @@ export const OBJECTIVES: Objective[] = [
     text: (s) =>
       s.rep.level < REP.mineLevel
         ? `⭐ Reach Level ${REP.mineLevel} to open the Coal Mine`
-        : padNeeds(s, 'zone_mine') ?? '⛏️ Open the Coal Mine (north)',
+        : (padNeeds(s, 'zone_mine') ?? '⛏️ Open the Coal Mine (north)'),
     done: (s) => s.zones.mine,
     target: padPos('zone_mine'),
   },
@@ -226,13 +246,61 @@ export const OBJECTIVES: Objective[] = [
   },
   { text: '⛏️ Hire a Miner', done: (s) => automated(s, 'miner'), target: padPos('miner') },
   { text: '🪨 Hire a Coal Carrier', done: (s) => automated(s, 'coalCarrier'), target: padPos('coalCarrier') },
+  // ---- Industrial Park ----
+  {
+    text: (s) =>
+      s.rep.level < PARK.industryLevel
+        ? `⭐ Reach Level ${PARK.industryLevel} to open the Industrial Park`
+        : (padNeeds(s, 'zone_industry') ?? '🏭 Open the Industrial Park (south)'),
+    done: (s) => s.zones.industry,
+    target: padPos('zone_industry'),
+  },
+  { text: '🚛 Build the Log Export line', done: (s) => s.belts.exLog.level > 0, target: padPos('ex_log') },
+  { text: '⚙️ Belt furniture to the Truck Depot', done: (s) => s.belts.pFurn.level > 0, target: padPos('pb_furn') },
+  {
+    text: (s) => `🚚 Load 5 trucks with furniture (${Math.min(5, s.stats.trucksDone)}/5)`,
+    done: (s) => s.stats.trucksDone >= 5,
+    target: (s) => s.terminals.dock.restock,
+  },
+  {
+    text: (s) =>
+      s.rep.level < PARK.portLevel
+        ? `⭐ Reach Level ${PARK.portLevel} to build the Port`
+        : (padNeeds(s, 'zone_port') ?? '🚢 Build the Port'),
+    done: (s) => s.terminals.port.open,
+    target: padPos('zone_port'),
+  },
+  { text: '🚛 Export coal to the Steel Mill', done: (s) => s.belts.exCoal.level > 0, target: padPos('ex_coal') },
+  { text: '⚙️ Belt steel to the Port', done: (s) => s.belts.pSteel.level > 0, target: padPos('pb_steel') },
+  { text: '🚢 Load a cargo ship', done: (s) => s.stats.shipsDone >= 1, target: (s) => s.terminals.port.restock },
+  {
+    text: (s) =>
+      s.rep.level < PARK.airportLevel
+        ? `⭐ Reach Level ${PARK.airportLevel} to build the Airport`
+        : (padNeeds(s, 'zone_airport') ?? '✈️ Build the Airport'),
+    done: (s) => s.terminals.air.open,
+    target: padPos('zone_airport'),
+  },
+  {
+    text: '🚛 Export coats and smoked fish',
+    done: (s) => s.belts.exCoat.level > 0 && s.belts.exFish.level > 0,
+    target: (s) => padPos('ex_coat')(s) ?? padPos('ex_fish')(s),
+  },
+  {
+    text: '⚙️ Belt jackets and cans to the Airport',
+    done: (s) => s.belts.pJacket.level > 0 && s.belts.pCanned.level > 0,
+    target: (s) => padPos('pb_jacket')(s) ?? padPos('pb_canned')(s),
+  },
+  { text: '✈️ Load a cargo plane', done: (s) => s.stats.planesDone >= 1, target: (s) => s.terminals.air.restock },
   {
     // the open-ended tail: always point at the next thing worth buying
     text: (s) => {
       const pad = nextPad(s)
       if (!pad) return `⭐ Grow the settlement — reach Level ${s.rep.level + 1}`
       const left = Math.ceil(pad.cost - pad.paid)
-      return s.money >= left ? `⬆️ Next: ${pad.label} — $${fmt(left)}` : `💵 Save $${fmt(left - s.money)} for ${pad.label}`
+      return s.money >= left
+        ? `⬆️ Next: ${pad.label} — $${fmt(left)}`
+        : `💵 Save $${fmt(left - s.money)} for ${pad.label}`
     },
     done: () => false,
     target: (s) => nextPad(s)?.pos ?? null,
@@ -288,6 +356,13 @@ function dropOff(s: Sim, kind: ResKind): { at: V2; name: string } | null {
       return st.fish.unlocked ? { at: st.fish.restock, name: '🐟 Fish stall' } : null
     case 'coal':
       return s.furnace.built ? { at: s.furnace.feed, name: '🔥 Furnace' } : null
+    case 'furniture':
+      return s.terminals.dock.open ? { at: s.terminals.dock.restock, name: '🚚 Truck Depot' } : null
+    case 'steel':
+      return s.terminals.port.open ? { at: s.terminals.port.restock, name: '🚢 Port' } : null
+    case 'jacket':
+    case 'canned':
+      return s.terminals.air.open ? { at: s.terminals.air.restock, name: '✈️ Airport' } : null
   }
 }
 
@@ -310,7 +385,15 @@ function updateGuides(sim: Sim, obj: Objective) {
       if (dest.at !== tgt && dist(p, dest.at) > 3.5) g.push({ x: dest.at.x, z: dest.at.z, color: 'blue' })
       if (!hinted.has(kind)) {
         hinted.add(kind)
-        sim.fx.push({ t: 'text', x: p.x, y: 3.1, z: p.z, str: `${RES_ICON[kind]} → ${dest.name}`, color: '#9fc0ff', size: 0.95 })
+        sim.fx.push({
+          t: 'text',
+          x: p.x,
+          y: 3.1,
+          z: p.z,
+          str: `${RES_ICON[kind]} → ${dest.name}`,
+          color: '#9fc0ff',
+          size: 0.95,
+        })
       }
     }
   }

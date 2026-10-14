@@ -3,8 +3,32 @@
 // travel as visible stacks. Role functions only choose sources and sinks;
 // reservations stop two workers claiming the same drop, tree or coin pile.
 
-import type { Sim, WorkerSim, WorkerRole, ResKind, ProcessorSim, ProcessorId, V2, DropSim, TreeSim, DepotSim, BeltId, WolfSim } from '../types'
-import { WORKERS, WORLD, GUARD, TREES, NODES, PROC_IDS, workerSpeed, workerCap, guardDamage, starWorkerMult } from '../balance'
+import type {
+  Sim,
+  WorkerSim,
+  WorkerRole,
+  ResKind,
+  ProcessorSim,
+  ProcessorId,
+  V2,
+  DropSim,
+  TreeSim,
+  DepotSim,
+  BeltId,
+  WolfSim,
+} from '../types'
+import {
+  WORKERS,
+  WORLD,
+  GUARD,
+  TREES,
+  NODES,
+  PROC_IDS,
+  workerSpeed,
+  workerCap,
+  guardDamage,
+  starWorkerMult,
+} from '../balance'
 import { RES_NAME } from '../icons'
 import { fmt } from '../format'
 import { seek, dist, lerpAngle, damp } from '../util'
@@ -179,7 +203,11 @@ function updateCollector(sim: Sim, w: WorkerSim, dt: number) {
 
 // ---------------- staff: stand at a workshop so it runs ----------------
 
-const STAFF_VERB: Record<ProcessorId, string> = { kitchen: 'cooking', tailor: 'sewing coats', smokehouse: 'smoking fish' }
+const STAFF_VERB: Partial<Record<ProcessorId, string>> = {
+  kitchen: 'cooking',
+  tailor: 'sewing coats',
+  smokehouse: 'smoking fish',
+}
 
 function updateStaff(sim: Sim, w: WorkerSim, dt: number, procId: ProcessorId) {
   const pr = sim.proc[procId]
@@ -189,7 +217,7 @@ function updateStaff(sim: Sim, w: WorkerSim, dt: number, procId: ProcessorId) {
   w.activity = !pr.staffed
     ? 'walking to work'
     : pr.active
-      ? STAFF_VERB[procId]
+      ? (STAFF_VERB[procId] ?? 'working')
       : pr.inCount === 0
         ? `waiting for ${RES_NAME[pr.inKind]}`
         : 'output full!'
@@ -251,7 +279,14 @@ function updateCashier(sim: Sim, w: WorkerSim, dt: number) {
     if (walk(sim, w, sim.chest.pos, dt, 0.9)) {
       sim.money += w.coins
       sim.stats.collected += w.coins
-      sim.fx.push({ t: 'text', x: sim.chest.pos.x, y: 1.6, z: sim.chest.pos.z, str: `+$${fmt(w.coins)}`, color: '#ffd75e' })
+      sim.fx.push({
+        t: 'text',
+        x: sim.chest.pos.x,
+        y: 1.6,
+        z: sim.chest.pos.z,
+        str: `+$${fmt(w.coins)}`,
+        color: '#ffd75e',
+      })
       for (let i = 0; i < 3; i++) sim.fx.push({ t: 'coin', x: sim.chest.pos.x, y: 0.6, z: sim.chest.pos.z })
       sfx.coin()
       w.coins = 0
@@ -323,7 +358,8 @@ function updateGatherer(sim: Sim, w: WorkerSim, dt: number, cfg: GatherCfg) {
   const cap = capOf(sim, w.role)
   const toPile =
     !!cfg.depot &&
-    ((!!cfg.belt && sim.belts[cfg.belt].level > 0) || (!!cfg.carrier && sim.workers.some((x) => x.role === cfg.carrier)))
+    ((!!cfg.belt && sim.belts[cfg.belt].level > 0) ||
+      (!!cfg.carrier && sim.workers.some((x) => x.role === cfg.carrier)))
   const sink = toPile ? depotSink(cfg.depot!, `stacking ${RES_NAME[cfg.kind]}`) : cfg.direct
 
   if (w.mode === 'deliver') {
@@ -516,7 +552,14 @@ function updateGuard(sim: Sim, w: WorkerSim, dt: number) {
   w.activity = sim.clock.night ? 'standing watch' : 'on patrol'
   w.patrolT += dt
   const ang = w.patrolT * 0.5
-  walk(sim, w, { x: w.post.x + Math.cos(ang) * GUARD.patrolX, z: w.post.z + Math.sin(ang) * GUARD.patrolZ }, dt, 0.3, 0.45)
+  walk(
+    sim,
+    w,
+    { x: w.post.x + Math.cos(ang) * GUARD.patrolX, z: w.post.z + Math.sin(ang) * GUARD.patrolZ },
+    dt,
+    0.3,
+    0.45,
+  )
 }
 
 // ---------------- dispatcher ----------------

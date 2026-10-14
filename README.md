@@ -110,8 +110,10 @@ Once food runs itself, new pressure and new goals arrive in turn:
   kitchen, tailor bench and smokehouse (Cook, Tailor, Smoker). Upgrades make
   them faster. The Hunting Tower is the hunting machine; Guards stay human.
 - **Cash belts** (after the Log + Food belts and 2 Cash Collectors). Overhead
-  money conveyors lift each stall's cash pile into the chest; the Cash
-  Collectors retire and caravan / bounty pay is banked automatically.
+  money conveyors lift each stall's cash pile into the chest, and two more
+  carry the Great Furnace's heat money and wolf bounties (riding higher, over
+  the others). Caravan pay is banked automatically. The Cash Collectors
+  retire.
 - **Endless upgrades.** Stall, workshop, Arrow Damage and Furnace upgrades
   keep going past Lv10 as ⭐ star levels (still capped by settlement level,
   2 + level), so there is always something to buy.
@@ -155,14 +157,49 @@ Once food runs itself, new pressure and new goals arrive in turn:
 - **Big game.** Mountain goats (Level 5+) and bears (Level 7+) join the deer;
   they take many hits, drop more meat and hides, and a hurt bear charges and
   swipes you away. More animals roam as the settlement grows.
-- **Hungrier survivors.** From Level 4 each survivor buys a bundle (up to 5
-  items, VIPs always the most), shown as ×N over their head.
+- **Hungrier survivors.** From Level 4 each survivor buys a bundle, shown as
+  ×N over their head (VIPs always the most): up to 5 items by Level 13, then
+  +1 every 2 levels, up to 25. From Level 6 a stall piled high with stock
+  draws bulk buyers (+1 item per 25 on the shelf, up to double the bundle)
+  and more of the crowd, and at high levels survivors arrive faster, so a
+  big stockpile sells off instead of piling up.
 - **Unlimited storage.** A stall or workshop at its max level (Lv10) never
   fills up.
 - **Task board** (Level 3+). Three rotating goals (sell X fish, hunt a bear,
   hit a rush...) pay cash + XP and are replaced by new ones scaled to your
   level. Every level-up also pays a cash gift, and once the objective track is
   done it always points at the next upgrade worth buying.
+
+## The Industrial Park (Level 12+)
+
+South of the camp, behind a wall, a modern park turns the camp's goods into
+products that vehicles come to buy. The frozen camp becomes its supply chain.
+
+| Stage | Export line from the camp | Factory → product | Customer |
+|---|---|---|---|
+| 🏭 Industrial Park (Lv 12) | 🪵 log pile | Furniture Factory → 🪑 furniture | 🚚 trucks queue at the Truck Depot |
+| 🚢 Port (Lv 14) | 🪨 coal pile | Steel Mill → 🔩 steel | 🚢 cargo ships dock at the berth |
+| ✈️ Airport (Lv 16) | 🧥 tailor + 🍣 smokehouse | Fashion House → 🧥 designer jackets, Cannery → 🥫 canned fish | ✈️ cargo planes land on the runway |
+
+- **Export lines** are overhead conveyors with orange rails, riding above the
+  cash belts (the crossing pairs ride at different heights). They share their
+  camp source with the stalls: each line gets first pick of only its share
+  (40% / 55% / 70% by level) plus anything piling up, so the stalls keep
+  selling, and upgrading an export line is a real choice between the two camps.
+- **Factories** run on their own (no crew). Upgrades make them faster and,
+  at Lv10, give them unlimited storage.
+- **Product belts** carry products to the Truck Depot, the Port and the
+  Airport. Before they're built, carry products there yourself.
+- **Trucks** queue along the depot road and leave once their order is
+  loaded. **Ships** and **planes** bring big orders with a timer: fill the
+  whole order for a 60% / 100% bonus, or they leave half full. Their orders
+  show in a small pill while you're in the park.
+- Freight cash rides overhead cash belts into the park's 🏦 Vault. Terminal
+  upgrades (Truck Depot + / Port + / Airport +) raise prices, load speed,
+  storage and how often trucks come.
+- The objective track, the task board (load trucks, ships, planes) and the
+  level-up messages cover the park too. Moving the Settlement resets it with
+  everything else.
 
 Ground chevrons around the player point at the current objective (gold), a
 raiding wolf (red), a waiting caravan (teal) and where your load goes (blue).
@@ -191,7 +228,7 @@ raiding wolf (red), a waiting caravan (teal) and where your load goes (blue).
 ## Dev tools
 
 - 🛠️ button (dev only): money / ⭐ / spawn cheats, night now, +wolf, summon a
-  caravan, open the Tannery, 1×/2×/4× speed, quality presets, live readouts of
+  caravan, open each district, +park (the whole Industrial Park), 1×/2×/4× speed, quality presets, live readouts of
   every stall, workshop and worker.
 - `window.__sim` — inspect the live sim. `window.__ff(seconds)` — deterministic
   fast-forward. `window.__input` — drive the player (`jx`/`jz`) from a script.

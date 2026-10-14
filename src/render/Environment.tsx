@@ -112,14 +112,13 @@ function makeForestTransforms(density: number): TreeXform[] {
     const x = Math.cos(ang) * rad
     const z = Math.sin(ang) * rad
     if (Math.abs(x) < 7 && z > 18) continue // keep the entry road open
+    if (inPark(x, z)) continue
     if (x < -28 && Math.abs(z - WORLD.caravanSpot.z) < 4.5) continue // caravan road
     out.push({ x, z, s: randRange(rng, 0.8, 1.5), rot: rng() * Math.PI * 2 })
   }
   // inner decorative clusters (outside gameplay zones)
   // (the fishery, mine and fish stall took over the old north / west clusters)
-  const clusters = [
-    { cx: -28, cz: 28, r: 5, n: 6 },
-  ]
+  const clusters = [{ cx: -28, cz: 28, r: 5, n: 6 }]
   for (const cl of clusters) {
     for (let i = 0; i < Math.floor(cl.n * density); i++) {
       out.push({
@@ -177,11 +176,7 @@ function Forest({ density }: { density: number }) {
       if (!im) return
       transforms.forEach((t, i) => {
         q.setFromAxisAngle(up, t.rot)
-        m.compose(
-          new THREE.Vector3(t.x, pineOffsets[key] * t.s, t.z),
-          q,
-          new THREE.Vector3(t.s, t.s, t.s),
-        )
+        m.compose(new THREE.Vector3(t.x, pineOffsets[key] * t.s, t.z), q, new THREE.Vector3(t.s, t.s, t.s))
         im.setMatrixAt(i, m)
       })
       im.instanceMatrix.needsUpdate = true
@@ -202,8 +197,16 @@ function Forest({ density }: { density: number }) {
 
 // ---------- rocks ----------
 
+/** the Industrial Park, its truck road, runway and the sea stay clear of trees and rocks */
+function inPark(x: number, z: number) {
+  if (z > 33 && Math.abs(x) < 50) return true
+  if (z > 46 && z < 58 && x < 0) return true // truck road
+  return z > 60 // runway + sea
+}
+
 /** keep decorative rocks out of the districts and the west market */
 function insidePlayArea(x: number, z: number) {
+  if (inPark(x, z)) return true
   const b = WORLD.bounds
   if (x < b.minX - 1 || x > b.maxX + 1 || z < b.minZ - 1 || z > b.maxZ + 1) return false
   if (z < -13 && x < 12) return true // fishery + mine
@@ -318,13 +321,7 @@ const smokeMat = new THREE.MeshBasicMaterial({
   depthWrite: false,
 })
 
-export function FireEffect({
-  scale = 1,
-  activeRef,
-}: {
-  scale?: number
-  activeRef?: { current: boolean }
-}) {
+export function FireEffect({ scale = 1, activeRef }: { scale?: number; activeRef?: { current: boolean } }) {
   const outer = useRef<THREE.Mesh>(null)
   const inner = useRef<THREE.Mesh>(null)
   const light = useRef<THREE.PointLight>(null)
@@ -347,13 +344,12 @@ export function FireEffect({
     }
     if (smoke.current) {
       smoke.current.children.forEach((p, i) => {
-        const cycle = ((t * 0.45 + i * 0.23) % 1 + 1) % 1
+        const cycle = (((t * 0.45 + i * 0.23) % 1) + 1) % 1
         p.position.y = 0.8 + cycle * 2.6
         p.position.x = Math.sin(t * 0.8 + i * 2) * 0.2 * cycle
         const sc = (0.14 + cycle * 0.4) * (on ? 1 : 0.4)
         p.scale.setScalar(sc)
-        ;(p as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.opacity =
-          0.28 * (1 - cycle)
+        ;(p as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.opacity = 0.28 * (1 - cycle)
       })
     }
   })

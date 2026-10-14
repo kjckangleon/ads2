@@ -153,7 +153,8 @@ export function PadsView() {
       else v.costLabel.set(`💵 ${fmt(remaining)}`, sim.money >= remaining ? '#9fe08a' : '#ffb0a0')
       // affordable pads hop to pull the player over
       const canBuy = !pad.locked && sim.money >= remaining
-      v.icon.position.y = 2.35 + (canBuy ? Math.abs(Math.sin(sim.time * 6 + i)) * 0.4 : Math.sin(sim.time * 2 + i) * 0.05)
+      v.icon.position.y =
+        2.35 + (canBuy ? Math.abs(Math.sin(sim.time * 6 + i)) * 0.4 : Math.sin(sim.time * 2 + i) * 0.05)
       v.icon.scale.setScalar(canBuy ? 1.15 : 0.95)
     })
   })

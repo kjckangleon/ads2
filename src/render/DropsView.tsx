@@ -67,8 +67,7 @@ export function DropsView() {
       const bob = Math.sin(d.age * 3 + d.id) * 0.045 + 0.045
       item.position.set(d.pos.x, (d.kind === 'raw' ? 0.06 : 0.1) + bob, d.pos.z)
       item.rotation.y = d.age * 0.9 + d.id
-      item.visible =
-        d.kind === 'raw' || ANIMALS.hideLifetime - d.age > 8 || Math.sin(d.age * 14) > -0.2
+      item.visible = d.kind === 'raw' || ANIMALS.hideLifetime - d.age > 8 || Math.sin(d.age * 14) > -0.2
     }
     for (let i = mi; i < POOL; i++) pool.meat[i].visible = false
     for (let i = hi; i < POOL; i++) pool.hides[i].visible = false

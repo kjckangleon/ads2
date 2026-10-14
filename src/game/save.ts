@@ -1,4 +1,16 @@
-import type { Sim, WorkerRole, StationId, ProcessorId, ZoneId, PileId, BeltId, TaskSim, MetaSim } from './types'
+import type {
+  Sim,
+  WorkerRole,
+  StationId,
+  ProcessorId,
+  ZoneId,
+  PileId,
+  BeltId,
+  TaskSim,
+  MetaSim,
+  TerminalId,
+  ResKind,
+} from './types'
 import {
   PAD_BY_ID,
   padCost,
@@ -21,10 +33,14 @@ import {
   playerSpeed,
   playerCarry,
   furnaceCap,
+  TERMINAL_IDS,
+  terminalCap,
+  terminalLoadTime,
 } from './balance'
 import { hireWorker } from './systems/workers'
 import { levelFromTotalXp } from './systems/progress'
 import { retireWorkers } from './systems/belts'
+import { openParkStage } from './systems/economy'
 
 const KEY = 'frostline-save-v1'
 
@@ -55,16 +71,29 @@ interface SaveV2 {
   meta?: Partial<MetaSim>
   incomeRate?: number
   savedAt?: number
+  /** Industrial Park terminal stock (levels and stages come back from the pads) */
+  terminals?: Partial<Record<TerminalId, Partial<Record<ResKind, number>>>>
+  freight?: { trucks: number; ships: number; planes: number }
 }
 
-const PROC_BELT: Record<ProcessorId, BeltId> = { kitchen: 'meat', tailor: 'coat', smokehouse: 'fish' }
+const PROC_BELT: Record<ProcessorId, BeltId[]> = {
+  kitchen: ['meat'],
+  tailor: ['coat', 'exCoat'],
+  smokehouse: ['fish', 'exFish'],
+  furnFactory: ['pFurn'],
+  steelMill: ['pSteel'],
+  fashion: ['pJacket'],
+  cannery: ['pCanned'],
+}
 
 /** machine goods (buffer + belt) that were on their way into this workshop */
 function inFlightTo(sim: Sim, id: ProcessorId): number {
   const m = sim.machines
   if (id === 'kitchen') return sim.belts.skinRaw.items.length + (m.skinner.buf.raw ?? 0)
   if (id === 'tailor') return sim.belts.skinHide.items.length + (m.skinner.buf.hide ?? 0)
-  return sim.belts.auger.items.length + (m.auger.buf.fish ?? 0)
+  if (id === 'smokehouse') return sim.belts.auger.items.length + (m.auger.buf.fish ?? 0)
+  // factories: export items go back to the camp pile they came from
+  return 0
 }
 
 export function saveNow(sim: Sim) {
@@ -86,7 +115,7 @@ export function saveNow(sim: Sim) {
         PROC_IDS.map((id) => {
           const pr = sim.proc[id]
           // items riding a belt go back on the table they came from (or on to the one they were headed for)
-          const outCount = pr.outCount + sim.belts[PROC_BELT[id]].items.length
+          const outCount = pr.outCount + PROC_BELT[id].reduce((n, b) => n + sim.belts[b].items.length, 0)
           const inCount = pr.inCount + inFlightTo(sim, id)
           return [id, { level: pr.level, inCount, outCount, unlocked: pr.unlocked }]
         }),
@@ -104,28 +133,43 @@ export function saveNow(sim: Sim) {
       piles: Object.fromEntries(
         sim.piles.map((p) => {
           let v = p.value
-          for (const id of STATION_IDS) if (sim.stations[id].payPileId === p.id) for (const c of sim.cash.belts[id].vals) v += c
+          for (const b of Object.values(sim.cash.belts)) if (b.pile === p.id) for (const c of b.vals) v += c
           return [p.id, v]
         }),
       ),
       rep: { ...sim.rep },
       // a save taken mid-raid resumes at the start of that night's dusk
-      clock: { enabled: sim.clock.enabled, t: sim.clock.night ? CLOCK.dayLength - 15 : sim.clock.t, day: sim.clock.day },
+      clock: {
+        enabled: sim.clock.enabled,
+        t: sim.clock.night ? CLOCK.dayLength - 15 : sim.clock.t,
+        day: sim.clock.day,
+      },
       raid: { count: sim.raid.count },
       zones: { ...sim.zones },
       lodge: { ...sim.lodge },
       game: { ...sim.game },
       caravan: { count: sim.caravan.count, nextIn: sim.caravan.state === 'away' ? sim.caravan.nextIn : 20 },
       rushBest: sim.rush.best,
-      depot: sim.depot.count + sim.belts.wood.items.length + sim.belts.saw.items.length + (sim.machines.saw.buf.log ?? 0),
+      depot:
+        sim.depot.count +
+        sim.belts.wood.items.length +
+        sim.belts.exLog.items.length +
+        sim.belts.saw.items.length +
+        (sim.machines.saw.buf.log ?? 0),
       coalDepot:
-        sim.coalDepot.count + sim.belts.coal.items.length + sim.belts.drill.items.length + (sim.machines.drill.buf.coal ?? 0),
+        sim.coalDepot.count +
+        sim.belts.coal.items.length +
+        sim.belts.exCoal.items.length +
+        sim.belts.drill.items.length +
+        (sim.machines.drill.buf.coal ?? 0),
       furnaceFuel: sim.furnace.fuel,
       // finished-but-unpaid tasks are kept open so the reward isn't lost
       tasks: sim.tasks.map((t) => ({ ...t, doneT: -1 })),
       meta: { ...sim.meta },
       incomeRate: sim.incomeRate,
       savedAt: Date.now(),
+      terminals: Object.fromEntries(TERMINAL_IDS.map((id) => [id, { ...sim.terminals[id].stock }])),
+      freight: { trucks: sim.freight.trucks, ships: sim.freight.ships, planes: sim.freight.planes },
     }
     localStorage.setItem(KEY, JSON.stringify(data))
   } catch {
@@ -267,6 +311,32 @@ function apply(sim: Sim, d: SaveV2) {
   sim.rateEarned = sim.stats.earned
   // the first tick compares against this and pays out the time away
   sim.lastWall = d.savedAt ?? 0
+
+  // Industrial Park: stages, belts and terminal upgrades come back from their pads
+  if (sim.zones.industry) openParkStage(sim, 'industry', true)
+  if ((d.pads.zone_port?.level ?? 0) > 0) openParkStage(sim, 'port', true)
+  if ((d.pads.zone_airport?.level ?? 0) > 0) openParkStage(sim, 'airport', true)
+  const PARK_BELT_PADS: [BeltId, string][] = [
+    ['exLog', 'ex_log'],
+    ['exCoal', 'ex_coal'],
+    ['exCoat', 'ex_coat'],
+    ['exFish', 'ex_fish'],
+    ['pFurn', 'pb_furn'],
+    ['pSteel', 'pb_steel'],
+    ['pJacket', 'pb_jacket'],
+    ['pCanned', 'pb_canned'],
+  ]
+  for (const [b, pad] of PARK_BELT_PADS) sim.belts[b].level = d.pads[pad]?.level ?? 0
+  const TERM_PADS: Record<TerminalId, string> = { dock: 'dock_up', port: 'port_up', air: 'air_up' }
+  for (const id of TERMINAL_IDS) {
+    const t = sim.terminals[id]
+    t.level = d.pads[TERM_PADS[id]]?.level ?? 0
+    t.cap = terminalCap(t.level)
+    t.loadTime = terminalLoadTime(t.level)
+    const st = d.terminals?.[id] ?? {}
+    for (const k of t.kinds) t.stock[k] = Math.min(st[k] ?? 0, t.cap)
+  }
+  if (d.freight) Object.assign(sim.freight, d.freight)
 
   for (const role of d.workers) hireWorker(sim, role)
   // haulers a belt has replaced don't come back

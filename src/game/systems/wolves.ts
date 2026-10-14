@@ -162,7 +162,15 @@ export function killWolf(sim: Sim, w: WolfSim) {
   addXp(sim, REP.xpWolf)
   sfx.wolfKill()
   sim.fx.push({ t: 'burst', x: w.pos.x, y: 0.8, z: w.pos.z, color: '#9aa1ad', n: 14, spread: 1 })
-  sim.fx.push({ t: 'text', x: w.pos.x, y: 2.0, z: w.pos.z, str: `${w.alpha ? '🐺 ALPHA DOWN ' : '🐺 '}+$${bounty}`, color: '#ffd75e', size: w.alpha ? 1.3 : 1 })
+  sim.fx.push({
+    t: 'text',
+    x: w.pos.x,
+    y: 2.0,
+    z: w.pos.z,
+    str: `${w.alpha ? '🐺 ALPHA DOWN ' : '🐺 '}+$${bounty}`,
+    color: '#ffd75e',
+    size: w.alpha ? 1.3 : 1,
+  })
   if (w.alpha) sim.fx.push({ t: 'shake', power: 0.4 })
 }
 

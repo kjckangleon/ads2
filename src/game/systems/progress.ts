@@ -2,7 +2,20 @@
 // big centre-screen announcement queue.
 
 import type { Sim, BannerTone } from '../types'
-import { REP, RUSH, CARAVAN, WORLD, ANIMALS, TASKS, CLASSIC_MAX, xpForLevel, upgradeCap, levelGift, maxDemand } from '../balance'
+import {
+  REP,
+  RUSH,
+  CARAVAN,
+  WORLD,
+  ANIMALS,
+  TASKS,
+  CLASSIC_MAX,
+  PARK,
+  xpForLevel,
+  upgradeCap,
+  levelGift,
+  maxDemand,
+} from '../balance'
 import { fmt } from '../format'
 import { automated } from './belts'
 import { sfx } from '../audio'
@@ -45,10 +58,15 @@ function perksFor(sim: Sim, lvl: number): string {
   if (lvl === CARAVAN.unlockLevel) out.push(foodAutomated ? '🛷 trade caravans' : '🛷 caravans once food runs itself')
   if (lvl === REP.tanneryLevel) out.push('🧥 Tannery for sale')
   if (lvl === REP.beltLevel) out.push('⚙️ conveyor belts · 🐐 mountain goats')
-  if (lvl === REP.fisheryLevel) out.push(sim.zones.tannery ? '🎣 Ice Fishery for sale' : '🎣 Ice Fishery after the Tannery')
+  if (lvl === REP.fisheryLevel)
+    out.push(sim.zones.tannery ? '🎣 Ice Fishery for sale' : '🎣 Ice Fishery after the Tannery')
   if (lvl === ANIMALS.bear.level) out.push('🐻 bears roam the meadow')
   if (lvl === TASKS.level) out.push('🎯 task board')
   if (lvl === REP.mineLevel) out.push(sim.zones.fishery ? '⛏️ Coal Mine for sale' : '⛏️ Coal Mine after the Fishery')
+  if (lvl === PARK.industryLevel)
+    out.push(sim.zones.mine ? '🏭 Industrial Park for sale' : '🏭 Industrial Park after the Mine')
+  if (lvl === PARK.portLevel && sim.zones.industry) out.push('🚢 the Port for sale')
+  if (lvl === PARK.airportLevel && sim.terminals.port.open) out.push('✈️ the Airport for sale')
   const cap = upgradeCap(lvl)
   out.push(cap > CLASSIC_MAX ? `⭐ star upgrades up to ${cap - CLASSIC_MAX}` : `upgrades up to Lv${cap}`)
   if (maxDemand(lvl) > maxDemand(lvl - 1)) out.push(`🛒 survivors buy up to ${maxDemand(lvl)} each`)
@@ -67,10 +85,27 @@ export function addXp(sim: Sim, n: number) {
     // every level-up comes with a cash gift
     const gift = levelGift(r.level)
     sim.money += gift
-    sim.fx.push({ t: 'text', x: sim.player.pos.x, y: 3.2, z: sim.player.pos.z, str: `🎁 +$${fmt(gift)}`, color: '#ffe680', size: 1.3 })
+    sim.fx.push({
+      t: 'text',
+      x: sim.player.pos.x,
+      y: 3.2,
+      z: sim.player.pos.z,
+      str: `🎁 +$${fmt(gift)}`,
+      color: '#ffe680',
+      size: 1.3,
+    })
     banner(sim, `⭐ Settlement Level ${r.level}`, `🎁 +$${fmt(gift)} · ${perksFor(sim, r.level)}`, 'good')
     sfx.levelUp()
-    sim.fx.push({ t: 'burst', x: WORLD.campfire.x, y: 1.5, z: WORLD.campfire.z, color: '#ffe680', n: 30, spread: 2.2, up: 4 })
+    sim.fx.push({
+      t: 'burst',
+      x: WORLD.campfire.x,
+      y: 1.5,
+      z: WORLD.campfire.z,
+      color: '#ffe680',
+      n: 30,
+      spread: 2.2,
+      up: 4,
+    })
     sim.fx.push({ t: 'shake', power: 0.2 })
     requestSave()
   }
