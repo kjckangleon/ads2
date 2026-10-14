@@ -10,6 +10,7 @@ import { updateWorkers } from './systems/workers'
 import { updateProcessors } from './systems/processors'
 import { updateBelts } from './systems/belts'
 import { updateFreight, bigOrderView } from './systems/freight'
+import { updatePressure } from './systems/pressure'
 import { updateMeta, pendingStars, canDoubleOffline, finishSettlementMove } from './systems/meta'
 import { starSalesMult } from './balance'
 import { updateTasks, taskProgress, taskText } from './systems/tasks'
@@ -159,6 +160,7 @@ export function tick(sim: Sim, dt: number) {
   updateClock(sim, dt)
   updatePlayer(sim, dt)
   updateCustomers(sim, dt)
+  updatePressure(sim, dt)
   updateAnimals(sim, dt)
   updateWolves(sim, dt)
   updateTower(sim, dt)

@@ -12,6 +12,8 @@ import { orderLine } from '../game/systems/freight'
 import { TextLabel, colorGeo, vertexColorMat, makeBlobShadow } from './rutil'
 
 const TRUCKS = 8
+const SHIPS = 8
+const PLANES = 8
 const TRAILER_COLORS = ['#d8463a', '#2f6fd6', '#2e9a5a', '#f2a82b']
 
 function box(w: number, h: number, d: number, x: number, y: number, z: number, color: string) {
@@ -126,56 +128,64 @@ export function VehiclesView() {
     const trucks = Array.from({ length: TRUCKS }, (_, i) =>
       unit(new THREE.Mesh(truckGeos[i % truckGeos.length], vertexColorMat), 4),
     )
-    const ship = unit(new THREE.Mesh(shipGeo(), vertexColorMat), 7, false)
-    // containers on deck show how full the ship is
-    const containers = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(1.25, 1.0, 2.2),
-      new THREE.MeshStandardMaterial({ roughness: 0.7 }),
-      18,
-    )
-    containers.count = 0
-    containers.castShadow = true
-    for (let i = 0; i < 18; i++) {
-      const row = i % 3
-      const col = Math.floor(i / 3) % 3
-      const layer = Math.floor(i / 9)
-      containers.setMatrixAt(
-        i,
-        new THREE.Matrix4().makeTranslation(-1.35 + row * 1.35, 1.75 + layer * 1.0, -2.2 + col * 2.6),
-      )
-      containers.setColorAt(i, new THREE.Color(CONTAINER_COLORS[i % CONTAINER_COLORS.length]))
-    }
-    ship.group.add(containers)
-    const planeMesh = new THREE.Mesh(planeGeo(), vertexColorMat)
-    planeMesh.scale.setScalar(0.72)
-    const plane = unit(planeMesh, 4.2)
-    root.add(...trucks.map((t) => t.group), ship.group, plane.group)
-    return { root, trucks, ship, containers, plane }
+    // several berths and gates: a pool of ships and planes (incoming, docked and leaving)
+    const shipGeom = shipGeo()
+    const containerGeo = new THREE.BoxGeometry(1.25, 1.0, 2.2)
+    const containerMat = new THREE.MeshStandardMaterial({ roughness: 0.7 })
+    const ships = Array.from({ length: SHIPS }, () => {
+      const u = unit(new THREE.Mesh(shipGeom, vertexColorMat), 7, false)
+      // containers on deck show how full the ship is
+      const containers = new THREE.InstancedMesh(containerGeo, containerMat, 18)
+      containers.count = 0
+      containers.castShadow = true
+      for (let i = 0; i < 18; i++) {
+        const row = i % 3
+        const col = Math.floor(i / 3) % 3
+        const layer = Math.floor(i / 9)
+        containers.setMatrixAt(
+          i,
+          new THREE.Matrix4().makeTranslation(-1.35 + row * 1.35, 1.75 + layer * 1.0, -2.2 + col * 2.6),
+        )
+        containers.setColorAt(i, new THREE.Color(CONTAINER_COLORS[i % CONTAINER_COLORS.length]))
+      }
+      u.group.add(containers)
+      return { ...u, containers }
+    })
+    const planeGeom = planeGeo()
+    const planes = Array.from({ length: PLANES }, () => {
+      const m = new THREE.Mesh(planeGeom, vertexColorMat)
+      // small enough for five to park side by side at the cargo gates
+      m.scale.setScalar(0.55)
+      return unit(m, 3.4)
+    })
+    root.add(...trucks.map((t) => t.group), ...ships.map((u) => u.group), ...planes.map((u) => u.group))
+    return { root, trucks, ships, planes }
   }, [])
 
   useFrame(() => {
     let t = 0
-    let ship = false
-    let plane = false
+    let si = 0
+    let pi = 0
     for (const v of sim.freight.vehicles) {
       if (v.kind === 'truck') {
         if (t < built.trucks.length) place(built.trucks[t++], v)
-      } else if (v.kind === 'ship' && !ship) {
-        ship = true
-        place(built.ship, v)
+      } else if (v.kind === 'ship') {
+        if (si >= built.ships.length) continue
+        const u = built.ships[si++]
+        place(u, v)
         const need = v.order.reduce((n, l) => n + l.need, 0)
         const got = v.order.reduce((n, l) => n + l.got, 0)
-        built.containers.count = need > 0 ? Math.round((got / need) * 18) : 0
-      } else if (v.kind === 'plane' && !plane) {
-        plane = true
-        place(built.plane, v)
+        u.containers.count = need > 0 ? Math.round((got / need) * 18) : 0
+      } else if (pi < built.planes.length) {
+        const u = built.planes[pi++]
+        place(u, v)
         // nose up while climbing, a little down on approach
-        built.plane.group.rotation.x = v.state === 'leave' && v.y > 0.1 ? -0.18 : v.y > 0.1 ? 0.06 : 0
+        u.group.rotation.x = v.state === 'leave' && v.y > 0.1 ? -0.18 : v.y > 0.1 ? 0.06 : 0
       }
     }
     for (let i = t; i < built.trucks.length; i++) built.trucks[i].group.visible = false
-    if (!ship) built.ship.group.visible = false
-    if (!plane) built.plane.group.visible = false
+    for (let i = si; i < built.ships.length; i++) built.ships[i].group.visible = false
+    for (let i = pi; i < built.planes.length; i++) built.planes[i].group.visible = false
   })
 
   return <primitive object={built.root} />

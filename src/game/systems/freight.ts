@@ -9,6 +9,7 @@ import { RES_ICON } from '../icons'
 import { fmt } from '../format'
 import { sfx } from '../audio'
 import { addXp, banner } from './progress'
+import { afterBigOrder } from './pressure'
 
 const T = FREIGHT.truck
 const SHIP = FREIGHT.ship
@@ -35,25 +36,42 @@ function truckLeaveRoute(): RoutePt[] {
   ]
 }
 
-function shipArriveRoute(): RoutePt[] {
-  const b = PARK.berth
-  return [pt(60, 80, 10), pt(b.x + 4, b.z, 4), pt(b.x, b.z, 2)]
+/** ships come in from the open sea down a lane south of the berths, then swing in */
+function shipArriveRoute(berth: number): RoutePt[] {
+  const b = PARK.berths[berth]
+  return [pt(140, 90, 10), pt(b.x + 10, b.z + 9, 8), pt(b.x + 4, b.z, 4), pt(b.x, b.z, 2)]
 }
-function shipLeaveRoute(): RoutePt[] {
-  const b = PARK.berth
-  return [pt(b.x - 6, b.z + 1, 3), pt(-20, 82, 7), pt(-140, 92, 10)]
+function shipLeaveRoute(berth: number): RoutePt[] {
+  const b = PARK.berths[berth]
+  // straight out to the lane first, so it never sails through a docked ship
+  return [pt(b.x, b.z + 9, 3), pt(b.x - 20, 86, 7), pt(-150, 92, 10)]
 }
 
-function planeArriveRoute(): RoutePt[] {
+/** planes land from the west, roll to their gate and turn in nose-first */
+function planeArriveRoute(gate: number): RoutePt[] {
   const z = PARK.runwayZ
-  const s = PARK.stand
-  // descend from the west, touch down and roll to a stop by the cargo terminal
-  return [pt(-150, z, 26, 22), pt(-56, z, 22, 0), pt(s.x - 10, z, 10), pt(s.x, s.z, 3)]
+  const g = PARK.gates[gate]
+  return [
+    pt(-200, z, 26, 22),
+    pt(-110, z, 22, 0),
+    pt(g.x - 10, z, 10),
+    pt(g.x, z, 4),
+    pt(g.x, g.z + 1.5, 3),
+    pt(g.x, g.z, 2),
+  ]
 }
-function planeLeaveRoute(): RoutePt[] {
+function planeLeaveRoute(gate: number): RoutePt[] {
   const z = PARK.runwayZ
-  // carry on east and lift off over the port
-  return [pt(16, z, 14), pt(40, z, 22, 4), pt(90, z, 28, 18), pt(170, z, 30, 36)]
+  const g = PARK.gates[gate]
+  // back onto the runway, then east and lift off over the port
+  return [pt(g.x, z, 3), pt(g.x + 10, z, 10), pt(30, z, 20), pt(70, z, 26, 10), pt(170, z, 30, 36)]
+}
+
+/** a berth / gate nobody is using right now (-1 = all busy) */
+function freeSpot(sim: Sim, kind: 'ship' | 'plane', count: number): number {
+  const used = new Set(sim.freight.vehicles.filter((v) => v.kind === kind && v.state !== 'leave').map((v) => v.slot))
+  for (let i = 0; i < count; i++) if (!used.has(i)) return i
+  return -1
 }
 
 function newVehicle(sim: Sim, kind: VehicleKind, route: RoutePt[]): VehicleSim {
@@ -173,11 +191,13 @@ function freeTruckSlot(sim: Sim): number {
 
 function truckWant(sim: Sim) {
   const lvl = Math.max(0, sim.rep.level - 12)
-  return freightOrderCapacity(
+  const base = freightOrderCapacity(
     Math.round(T.baseWant + T.wantPerLevel * lvl + Math.random() * 4),
     T.maxWant,
     sim.terminals.dock.level,
   )
+  // market pressure: a Truck Depot that's always stocked gets bigger orders
+  return Math.round(base * sim.terminals.dock.demand)
 }
 
 function spawnTruck(sim: Sim) {
@@ -228,20 +248,24 @@ function updateTruck(sim: Sim, v: VehicleSim, dt: number) {
 
 function shipOrder(sim: Sim): FreightLine[] {
   const lvl = Math.max(0, sim.rep.level - 14)
-  const need = freightOrderCapacity(
-    SHIP.base + SHIP.perShip * sim.freight.ships + SHIP.perLevel * lvl,
-    SHIP.max,
-    sim.terminals.port.level,
+  const need = Math.round(
+    freightOrderCapacity(
+      SHIP.base + SHIP.perShip * sim.freight.ships + SHIP.perLevel * lvl,
+      SHIP.max,
+      sim.terminals.port.level,
+    ) * sim.freight.shipDemand,
   )
   return [{ kind: 'steel', need, got: 0 }]
 }
 
 function planeOrder(sim: Sim): FreightLine[] {
   const lvl = Math.max(0, sim.rep.level - 16)
-  const need = freightOrderCapacity(
-    PLANE.base + PLANE.perPlane * sim.freight.planes + PLANE.perLevel * lvl,
-    PLANE.max,
-    sim.terminals.air.level,
+  const need = Math.round(
+    freightOrderCapacity(
+      PLANE.base + PLANE.perPlane * sim.freight.planes + PLANE.perLevel * lvl,
+      PLANE.max,
+      sim.terminals.air.level,
+    ) * sim.freight.planeDemand,
   )
   return [
     { kind: 'jacket', need, got: 0 },
@@ -268,6 +292,7 @@ function updateBig(sim: Sim, v: VehicleSim, t: TerminalSim, dt: number, cfg: typ
   if (!full && v.timer > 0) return
   const total = pay(sim, t, v, full ? cfg.bonus : 0)
   const ship = v.kind === 'ship'
+  afterBigOrder(sim, ship ? 'ship' : 'plane', full, v.timer / v.maxTimer)
   if (ship) {
     sim.freight.ships++
     sim.stats.shipsDone++
@@ -284,7 +309,8 @@ function updateBig(sim: Sim, v: VehicleSim, t: TerminalSim, dt: number, cfg: typ
   } else if (total > 0) {
     banner(sim, `${icon} Left half full`, `+$${fmt(total)}, fill the whole order for the bonus`, 'info')
   }
-  leave(v, ship ? shipLeaveRoute() : planeLeaveRoute())
+  leave(v, ship ? shipLeaveRoute(v.slot) : planeLeaveRoute(v.slot))
+  v.slot = -1
 }
 
 export function updateFreight(sim: Sim, dt: number) {
@@ -298,21 +324,25 @@ export function updateFreight(sim: Sim, dt: number) {
       spawnTruck(sim)
     }
   }
-  const has = (k: VehicleKind) => f.vehicles.some((v) => v.kind === k && v.state !== 'leave')
-  if (port.open && !has('ship')) {
+  // one ship per berth and one plane per gate; a free one gets the next arrival
+  const berth = port.open ? freeSpot(sim, 'ship', f.berths) : -1
+  if (berth >= 0) {
     f.shipT -= dt
     if (f.shipT <= 0) {
       f.shipT = Math.max(SHIP.minEvery, SHIP.every * Math.pow(0.9, port.level))
-      const v = newVehicle(sim, 'ship', shipArriveRoute())
+      const v = newVehicle(sim, 'ship', shipArriveRoute(berth))
+      v.slot = berth
       v.order = shipOrder(sim)
       banner(sim, '🚢 Cargo ship inbound', `Wants ${orderLine(v.order)} at the Port`, 'info')
     }
   }
-  if (air.open && !has('plane')) {
+  const gate = air.open ? freeSpot(sim, 'plane', f.gates) : -1
+  if (gate >= 0) {
     f.planeT -= dt
     if (f.planeT <= 0) {
       f.planeT = Math.max(PLANE.minEvery, PLANE.every * Math.pow(0.9, air.level))
-      const v = newVehicle(sim, 'plane', planeArriveRoute())
+      const v = newVehicle(sim, 'plane', planeArriveRoute(gate))
+      v.slot = gate
       v.order = planeOrder(sim)
       banner(sim, '✈️ Cargo plane landing', `Wants ${orderLine(v.order)} at the Airport`, 'info')
     }
@@ -334,7 +364,13 @@ export function updateFreight(sim: Sim, dt: number) {
 export function bigOrderView(sim: Sim, kind: 'ship' | 'plane') {
   const terminal = kind === 'ship' ? sim.terminals.port : sim.terminals.air
   if (!terminal.open) return { text: '', frac: 0, time: 0 }
-  const v = sim.freight.vehicles.find((x) => x.kind === kind && x.state !== 'leave')
+  const all = sim.freight.vehicles.filter((x) => x.kind === kind && x.state !== 'leave')
+  // several docked at once: show how many, and the one that leaves soonest
+  const loading = all.filter((x) => x.state === 'load').sort((a, b) => a.timer - b.timer)
+  const v = loading[0] ?? all[0]
+  const many = all.length > 1 ? `${all.length}× ` : ''
+  if (v && v.state === 'load')
+    return { text: many + orderLine(v.order), frac: v.timer / v.maxTimer, time: Math.ceil(v.timer) }
   if (!v)
     return { text: 'Next dispatch', frac: 0, time: Math.ceil(kind === 'ship' ? sim.freight.shipT : sim.freight.planeT) }
   if (v.state === 'arrive') {

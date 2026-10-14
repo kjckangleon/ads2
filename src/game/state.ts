@@ -87,6 +87,9 @@ function makeStation(id: StationId, at: V2, unlocked: boolean): StationSim {
     slots: new Array(cfg.queueSize).fill(null),
     restock: { x: at.x, z: at.z - 1.9 },
     payPileId: cfg.pile,
+    demand: 1,
+    emptyT: 0,
+    winT: 0,
   }
 }
 
@@ -136,6 +139,9 @@ function makeTerminal(id: TerminalId): TerminalSim {
     level: 0,
     loadTime: terminalLoadTime(0),
     pile: cfg.pile,
+    demand: 1,
+    emptyT: 0,
+    winT: 0,
   }
 }
 
@@ -414,6 +420,7 @@ export function createSim(): Sim {
       wolvesKilled: 0,
       caravansDone: 0,
       caravanVisits: 0,
+      lostSales: 0,
       trucksDone: 0,
       shipsDone: 0,
       planesDone: 0,
@@ -466,6 +473,10 @@ export function createSim(): Sim {
       trucks: 0,
       ships: 0,
       planes: 0,
+      shipDemand: 1,
+      planeDemand: 1,
+      berths: 1,
+      gates: 1,
     },
     moving: 0,
     movingStars: 0,

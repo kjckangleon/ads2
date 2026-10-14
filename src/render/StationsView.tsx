@@ -116,7 +116,7 @@ function buildStall(id: StationId, withLight: boolean): Stall {
   root.add(sign)
 
   // the stock count sits on top of the roof, where the camera can see it
-  const label = new TextLabel(0.95)
+  const label = new TextLabel(0.95, 360)
   label.sprite.position.set(0, 3.2, 0.1)
   label.sprite.renderOrder = 6
   root.add(label.sprite)
@@ -233,7 +233,9 @@ function StallView({ id, withLight }: { id: StationId; withLight: boolean }) {
     const [sxz, sy] = squash.value(sim.time)
     built.root.scale.set(s * sxz, s * sy, s * sxz)
     built.stock.update(st.stock, sim.time)
-    built.label.set(capText(st.stock, st.capacity), st.stock === 0 ? '#ff9a8a' : '#ffffff')
+    // under market pressure the roof also shows how hot demand is
+    const hot = st.demand >= 1.05 ? `  🔥×${st.demand.toFixed(1)}` : ''
+    built.label.set(capText(st.stock, st.capacity) + hot, st.stock === 0 ? '#ff9a8a' : '#ffffff')
     for (const d of built.deco) d.obj.visible = st.level >= d.lvl
   })
 

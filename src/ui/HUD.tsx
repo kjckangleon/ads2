@@ -7,6 +7,7 @@ import { claimOffline, buyPerk, canBuyPerk, perkCost, freeStars } from '../game/
 import { PERKS, PERK_IDS } from '../game/balance'
 import { perk } from '../game/perks'
 import { requestSave } from '../game/saveFlag'
+import { hardReset } from '../game/save'
 
 /** Rolls toward the real balance each animation frame and bumps on gains. */
 function Money() {
@@ -207,6 +208,48 @@ function Offline() {
   )
 }
 
+/** ⚙️ settings: for now, the hard reset (with a clear warning first) */
+function Settings() {
+  const set = useUI((s) => s.set)
+  const [confirm, setConfirm] = useState(false)
+  return (
+    <div className="hud-modal-backdrop hud-interactive" onClick={() => set({ panel: '' })}>
+      <div className="hud-modal" onClick={(e) => e.stopPropagation()}>
+        {!confirm ? (
+          <>
+            <div className="hud-modal-title">⚙️ Settings</div>
+            <div className="hud-modal-sub">Start the whole game again from the very beginning.</div>
+            <div className="hud-modal-buttons">
+              <button className="hud-modal-btn danger" onClick={() => setConfirm(true)}>
+                ↺ Reset game
+              </button>
+              <button className="hud-modal-btn" onClick={() => set({ panel: '' })}>
+                Close
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="hud-modal-title">⚠️ Do you really want to reset the game to start?</div>
+            <div className="hud-modal-sub">
+              Everything is wiped: money, levels, districts, the Industrial Park, Frost Stars and perks. This can&apos;t
+              be undone.
+            </div>
+            <div className="hud-modal-buttons">
+              <button className="hud-modal-btn" onClick={() => setConfirm(false)}>
+                No, keep playing
+              </button>
+              <button className="hud-modal-btn danger" onClick={() => hardReset()}>
+                Yes, reset
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /** full-screen fade while the camp packs up for the next settlement */
 function Moving() {
   const moving = useUI((s) => s.moving)
@@ -335,7 +378,15 @@ function Shop() {
 }
 
 /** a HUD toggle button with an optional badge */
-function PanelButton({ id, icon, badge }: { id: 'alerts' | 'tasks' | 'shop'; icon: string; badge?: number }) {
+function PanelButton({
+  id,
+  icon,
+  badge,
+}: {
+  id: 'alerts' | 'tasks' | 'shop' | 'settings'
+  icon: string
+  badge?: number
+}) {
   const panel = useUI((s) => s.panel)
   const set = useUI((s) => s.set)
   const latest = useUI((s) => s.latestNotice)
@@ -433,6 +484,7 @@ export function HUD() {
           >
             {noGrab ? '🙅' : '✋'}
           </button>
+          <PanelButton id="settings" icon="⚙️" />
           <button
             className="hud-btn"
             onClick={() => {
@@ -463,6 +515,7 @@ export function HUD() {
         {panel !== 'alerts' && panel !== 'tasks' && <Clock />}
       </div>
       {panel === 'shop' && <Shop />}
+      {panel === 'settings' && <Settings />}
       <Offline />
       <Moving />
     </div>

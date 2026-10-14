@@ -610,6 +610,10 @@ canvas {
   cursor: pointer;
 }
 
+.hud-modal-btn.danger {
+  background: #c0392b;
+}
+
 .hud-modal-btn.gold {
   background: linear-gradient(#f0c84a, #d89a22);
   color: #2a1a00;

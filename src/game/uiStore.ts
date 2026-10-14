@@ -34,7 +34,7 @@ export interface NoticeView {
 }
 
 /** which HUD dropdown / panel is open ('' = none) */
-export type Panel = '' | 'alerts' | 'tasks' | 'shop'
+export type Panel = '' | 'alerts' | 'tasks' | 'shop' | 'settings'
 
 export interface UIState {
   settlementRun: number

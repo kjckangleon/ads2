@@ -209,6 +209,32 @@ products that vehicles come to buy. The frozen camp becomes its supply chain.
   level-up messages cover the park too. Moving the Settlement resets it with
   everything else.
 
+## Market pressure (Level 8+): demand always outruns you
+
+Every stall and the Truck Depot watch how often they run dry. Keep one
+stocked and word spreads: its demand climbs (bigger bundles, more of the
+crowd, bigger truck orders, shown as 🔥×N on the stall's roof) until your
+supply only just keeps up. Fall behind and it eases off a little, but a
+survivor who waits about 20 s at an empty counter walks away (a lost sale,
+and your rush breaks). Ships and planes bring bigger orders every time you
+fill one fast, and smaller ones after a miss. Upgrading production always
+has a payoff: there's always more demand waiting for it.
+
+## More ships and planes, hungrier survivors
+
+- **Extra Berth / Extra Gate** pads at the Port and the Airport add up to 4
+  more berths and cargo gates (5 each), so several ships and planes load at
+  once from the same stock. They're big late-game money sinks (5B / 8B and
+  ×5 per level). Planes park nose-in on a cargo apron north of the runway;
+  ships dock side by side along the quay. The HUD pill shows how many are in
+  and the order that leaves soonest.
+- **Bundles grow with √level** (×2 at Level 4, ×4 at Level 16, ×5 at Level 25),
+  on top of market pressure (up to 150 items per survivor). A survivor who
+  gives up mid-bundle pays for what they already got.
+- **⚙️ Settings → Reset game** wipes everything (money, levels, districts, the
+  park, Frost Stars and perks) after a "Do you really want to reset the game
+  to start?" warning.
+
 ## Your own powers (late game)
 
 - **🚀 Jetpack** (Level 6+, needs Boots maxed, endless levels). You hover and

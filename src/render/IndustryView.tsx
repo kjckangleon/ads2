@@ -65,7 +65,9 @@ function buildGround(): THREE.Group {
   // terminal lots: depot yard, airport apron, the port's quay
   concrete.push(flat(-33, 43.5, -22.5, 49))
   concrete.push(flat(-6.5, 55, 9, 64))
-  concrete.push(flat(12.5, 60.4, 46, PARK.seaZ))
+  concrete.push(flat(12.5, 60.4, 84, PARK.seaZ))
+  // cargo apron with a gate per plane, north of the runway
+  concrete.push(flat(-51, 54.6, -9.5, 63.6))
   // runway with edge lights' strip, centre dashes and threshold bars
   const rz = PARK.runwayZ
   asphalt.push(flat(-160, rz - 2.4, 12, rz + 2.4))

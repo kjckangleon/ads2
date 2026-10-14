@@ -123,6 +123,11 @@ export interface StationSim {
   slots: (number | null)[]
   restock: V2
   payPileId: PileId
+  /** market pressure: how much more customers want here (1 = normal); climbs while you keep up */
+  demand: number
+  /** seconds empty / seconds watched in the current pressure window */
+  emptyT: number
+  winT: number
 }
 
 export interface ProcessorSim {
@@ -603,6 +608,10 @@ export interface TerminalSim {
   /** seconds per item loaded onto a vehicle */
   loadTime: number
   pile: PileId
+  /** market pressure on what vehicles order here (1 = normal) */
+  demand: number
+  emptyT: number
+  winT: number
 }
 
 export type VehicleKind = 'truck' | 'ship' | 'plane'
@@ -649,6 +658,12 @@ export interface FreightSim {
   trucks: number
   ships: number
   planes: number
+  /** market pressure on ship / plane order sizes: grows each time you fill one fast */
+  shipDemand: number
+  planeDemand: number
+  /** berths at the Port and gates at the Airport (each loads its own ship / plane) */
+  berths: number
+  gates: number
 }
 
 export interface MetaSim {
@@ -688,6 +703,8 @@ export interface Stats extends StatsExtra {
   wolvesKilled: number
   caravansDone: number
   caravanVisits: number
+  /** survivors who gave up waiting at an empty stall */
+  lostSales: number
   trucksDone: number
   shipsDone: number
   planesDone: number

@@ -50,7 +50,7 @@ interface SaveV2 {
   money: number
   objective: number
   stats: Partial<Sim['stats']>
-  stations: Partial<Record<StationId, { level: number; stock: number; unlocked: boolean }>>
+  stations: Partial<Record<StationId, { level: number; stock: number; unlocked: boolean; demand?: number }>>
   proc: Partial<Record<ProcessorId, { level: number; inCount: number; outCount: number; unlocked: boolean }>>
   tower: { built: boolean; dmgLvl: number; spdLvl: number; rngLvl: number }
   workers: WorkerRole[]
@@ -82,7 +82,9 @@ interface SaveV2 {
   offline?: Sim['offline']
   /** Industrial Park terminal stock (levels and stages come back from the pads) */
   terminals?: Partial<Record<TerminalId, Partial<Record<ResKind, number>>>>
-  freight?: { trucks: number; ships: number; planes: number }
+  freight?: { trucks: number; ships: number; planes: number; shipDemand?: number; planeDemand?: number }
+  /** market pressure on the Truck Depot */
+  dockDemand?: number
 }
 
 const PROC_BELT: Record<ProcessorId, BeltId[]> = {
@@ -105,7 +107,18 @@ function inFlightTo(sim: Sim, id: ProcessorId): number {
   return 0
 }
 
+/** set while the game is being wiped: nothing may write a save again before the reload */
+let wiping = false
+
+/** Hard reset: wipe the save (Frost Stars and perks too) and start over from the very beginning. */
+export function hardReset() {
+  wiping = true
+  clearSave()
+  if (typeof window !== 'undefined' && window.location) window.location.reload()
+}
+
 export function saveNow(sim: Sim) {
+  if (wiping) return
   // the old camp must not overwrite the new one while it packs up
   if (sim.moving > 0) return
   try {
@@ -117,7 +130,7 @@ export function saveNow(sim: Sim) {
       stations: Object.fromEntries(
         STATION_IDS.map((id) => {
           const st = sim.stations[id]
-          return [id, { level: st.level, stock: st.stock, unlocked: st.unlocked }]
+          return [id, { level: st.level, stock: st.stock, unlocked: st.unlocked, demand: st.demand }]
         }),
       ),
       proc: Object.fromEntries(
@@ -186,7 +199,14 @@ export function saveNow(sim: Sim) {
       savedAt: Date.now(),
       offline: sim.offline ? { ...sim.offline } : null,
       terminals: Object.fromEntries(TERMINAL_IDS.map((id) => [id, { ...sim.terminals[id].stock }])),
-      freight: { trucks: sim.freight.trucks, ships: sim.freight.ships, planes: sim.freight.planes },
+      freight: {
+        trucks: sim.freight.trucks,
+        ships: sim.freight.ships,
+        planes: sim.freight.planes,
+        shipDemand: sim.freight.shipDemand,
+        planeDemand: sim.freight.planeDemand,
+      },
+      dockDemand: sim.terminals.dock.demand,
     }
     localStorage.setItem(KEY, JSON.stringify(data))
   } catch {
@@ -253,6 +273,7 @@ function apply(sim: Sim, d: SaveV2) {
     st.price = stationPrice(id, sv.level)
     st.serviceTime = stationServiceTime(id, sv.level)
     st.stock = Math.min(sv.stock, st.capacity)
+    st.demand = Math.max(1, sv.demand ?? 1)
   }
 
   for (const id of PROC_IDS) {
@@ -371,6 +392,12 @@ function apply(sim: Sim, d: SaveV2) {
     for (const k of t.kinds) t.stock[k] = Math.min(st[k] ?? 0, t.cap)
   }
   if (d.freight) Object.assign(sim.freight, d.freight)
+  sim.freight.shipDemand = Math.max(1, sim.freight.shipDemand ?? 1)
+  sim.freight.planeDemand = Math.max(1, sim.freight.planeDemand ?? 1)
+  sim.terminals.dock.demand = Math.max(1, d.dockDemand ?? 1)
+  // extra berths / gates come back from their pads
+  sim.freight.berths = 1 + (d.pads.port_berth?.level ?? 0)
+  sim.freight.gates = 1 + (d.pads.air_gate?.level ?? 0)
 
   for (const role of d.workers) hireWorker(sim, role)
   // haulers a belt has replaced don't come back

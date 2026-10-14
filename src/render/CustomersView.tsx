@@ -21,6 +21,15 @@ const SOLD: ResKind[] = ['log', 'cooked', 'coat', 'smoked']
 // ---------- billboard atlas: need icons, moods, bundle counts ----------
 
 const COUNTS = Array.from({ length: CUSTOMERS.demandCap - 1 }, (_, i) => `×${i + 2}`)
+/** past ×25 the bubble rounds down to a bucket */
+const BIG = [30, 40, 50, 60, 80, 100, 150]
+COUNTS.push(...BIG.map((n) => `×${n}`))
+function countCell(left: number) {
+  if (left <= CUSTOMERS.demandCap) return `×${left}`
+  let b = CUSTOMERS.demandCap
+  for (const n of BIG) if (left >= n) b = n
+  return `×${b}`
+}
 const CELLS = ['🪵', '🍖', '🧥', '🐟', '😍', '😠', '😊', '😱', '❗', '👑', ...COUNTS]
 const GRID = Math.ceil(Math.sqrt(CELLS.length))
 const CELL_PX = 128
@@ -36,7 +45,7 @@ function makeAtlas(): THREE.CanvasTexture {
     const x = (i % GRID) * CELL_PX + CELL_PX / 2
     const y = Math.floor(i / GRID) * CELL_PX + CELL_PX / 2
     if (ch.startsWith('×')) {
-      ctx.font = `bold ${ch.length > 2 ? 60 : 76}px system-ui, sans-serif`
+      ctx.font = `bold ${ch.length > 3 ? 48 : ch.length > 2 ? 60 : 76}px system-ui, sans-serif`
       ctx.lineWidth = 14
       ctx.strokeStyle = 'rgba(10,16,26,0.9)'
       ctx.strokeText(ch, x, y + 4)
@@ -259,7 +268,7 @@ export function CustomersView() {
       if (c.state !== 'leaving' && c.want > 1 && left > 1) {
         tmp.out.compose(tmp.p.set(x, 2.62 * scale + bob, c.pos.z), tmp.q.identity(), tmp.s.setScalar(0.55))
         bubbles.mesh.setMatrixAt(bubbleN, tmp.out)
-        bubbles.cell.setX(bubbleN++, cellOf.get(`×${Math.min(left, CUSTOMERS.demandCap)}`) ?? 0)
+        bubbles.cell.setX(bubbleN++, cellOf.get(countCell(left)) ?? 0)
       }
     }
 

@@ -175,7 +175,10 @@ function padVisible(sim: Sim, pad: PadSim): boolean {
     case 'fashion_up':
     case 'cannery_up':
     case 'air_up':
+    case 'air_gate':
       return sim.terminals.air.open
+    case 'port_berth':
+      return sim.terminals.port.open
     default:
       return false
   }
@@ -623,6 +626,23 @@ export function applyPad(sim: Sim, pad: PadSim) {
     case 'zone_airport':
       openParkStage(sim, 'airport')
       break
+    case 'port_berth':
+    case 'air_gate': {
+      const port = pad.id === 'port_berth'
+      if (port) sim.freight.berths = 1 + pad.level
+      else sim.freight.gates = 1 + pad.level
+      const at = port ? PARK.berths[sim.freight.berths - 1] : PARK.gates[sim.freight.gates - 1]
+      sim.focus = { x: at.x, z: at.z, t: 1.8 }
+      sim.fx.push({ t: 'burst', x: at.x, y: 1.5, z: at.z, color: '#cfe0ff', n: 24, spread: 2.4 })
+      banner(
+        sim,
+        port ? '🚢 New berth!' : '✈️ New gate!',
+        port ? 'Another cargo ship can dock at once' : 'Another cargo plane can load at once',
+        'good',
+      )
+      sfx.build()
+      break
+    }
     default:
       if (EXPORT_PADS[pad.id]) buildParkBelt(sim, EXPORT_PADS[pad.id], pad.level)
       else if (FACTORY_PADS[pad.id]) upgradeProc(sim, FACTORY_PADS[pad.id])

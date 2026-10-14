@@ -227,6 +227,12 @@ export const CUSTOMERS = {
   xpPerExtraItem: 0.5,
 }
 
+/** every survivor's bundle is also multiplied by level^this (Level 4 ×2, Level 16 ×4, Level 25 ×5) */
+export const LEVEL_DEMAND_POW = 0.5
+export function levelDemandMult(level: number) {
+  return Math.pow(Math.max(1, level), LEVEL_DEMAND_POW)
+}
+
 /** most items one survivor buys at this settlement level (keeps rising at high levels) */
 export function maxDemand(level: number) {
   const early = 1 + Math.floor((level - 1) / CUSTOMERS.demandEvery)
@@ -1172,11 +1178,24 @@ export const PARK = {
   truckTurnX: -19,
   truckSpacing: 6.6,
   /** ships dock at the berth by the quay; planes park on the apron north of the runway */
-  berth: { x: 24, z: 74.5 },
+  /** every berth along the quay, in the order you build them (Extra Berth pads) */
+  berths: [
+    { x: 24, z: 74.5 },
+    { x: 41, z: 74.5 },
+    { x: 7, z: 74.5 },
+    { x: 58, z: 74.5 },
+    { x: 75, z: 74.5 },
+  ],
   seaZ: 69,
   runwayZ: 66,
-  /** planes load right on the runway, beside the cargo terminal */
-  stand: { x: -1, z: 66 },
+  /** cargo gates on the apron north of the runway (Extra Gate pads), planes park nose-in */
+  gates: [
+    { x: -14, z: 58.8 },
+    { x: -22, z: 58.8 },
+    { x: -30, z: 58.8 },
+    { x: -38, z: 58.8 },
+    { x: -46, z: 58.8 },
+  ],
 }
 
 export const TERMINAL_CFG: Record<TerminalId, { pos: V2; restock: V2; kinds: ResKind[]; pile: PileId; name: string }> =
@@ -1247,6 +1266,33 @@ export function freightPrice(kind: ResKind, level: number) {
 /** Scale both ordinary orders and their late-game ceiling with terminal upgrades. */
 export function freightOrderCapacity(baseOrder: number, baseMax: number, terminalLevel: number) {
   return Math.round(Math.min(baseMax, baseOrder) * (1 + FREIGHT.orderCapacityPerLevel * terminalLevel))
+}
+
+// ---- market pressure: late-game demand climbs until your supply only just keeps up ----
+
+export const PRESSURE = {
+  /** settlement level it switches on */
+  level: 8,
+  /** seconds per check */
+  window: 12,
+  /** empty less than this share of the time = you're keeping up, so demand climbs... */
+  calm: 0.15,
+  /** ...empty more than this = you're swamped, so it eases a little (it never drops below 1) */
+  swamped: 0.45,
+  up: 1.12,
+  down: 0.95,
+  max: 30,
+  /** survivors give up after waiting this long at an empty stall */
+  walkAway: 20,
+  /** biggest bundle a survivor will ask for under pressure */
+  maxWant: 150,
+  /** ships / planes: fill with this share of the time left and the next order is bigger */
+  fastFill: 0.35,
+  bigUp: 1.18,
+  okUp: 1.06,
+  failDown: 0.9,
+  /** an alert each time demand passes another multiple of this */
+  noticeStep: 1.5,
 }
 
 // ---- derived stat helpers (used by upgrades AND save-load reconstruction) ----
@@ -1952,6 +1998,27 @@ export const PAD_DEFS: PadDef[] = [
     costMult: 1.6,
     maxLevel: ENDLESS,
     gated: true,
+  },
+  // more berths and gates: several ships and planes load at once (big late-game money sinks)
+  {
+    id: 'port_berth',
+    x: 13.8,
+    z: 64.6,
+    label: 'Extra Berth',
+    icon: '🚢',
+    baseCost: 5e9,
+    costMult: 5,
+    maxLevel: 4,
+  },
+  {
+    id: 'air_gate',
+    x: -5.2,
+    z: 62.2,
+    label: 'Extra Gate',
+    icon: '✈️',
+    baseCost: 8e9,
+    costMult: 5,
+    maxLevel: 4,
   },
 ]
 

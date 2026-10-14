@@ -1,12 +1,14 @@
 import type { Sim, CustomerSim, StationSim, StationId } from '../types'
 import {
   CUSTOMERS,
+  PRESSURE,
   WORLD,
   RUSH,
   REP,
   STATION_IDS,
   maxCustomers,
   maxDemand,
+  levelDemandMult,
   bulkDemand,
   minSpawnInterval,
   furnaceBonus,
@@ -17,6 +19,7 @@ import { sfx } from '../audio'
 import { addXp, rushMult } from './progress'
 import { eventSpawnMult, eventPayMult, festivalOn } from './events'
 import { perk } from '../perks'
+import { pressureOn } from './pressure'
 
 export const VIP_VARIANT = 6
 const NORMAL_VARIANTS = 6
@@ -90,6 +93,8 @@ function pickStation(sim: Sim): StationId | null {
     let w = CUSTOMERS.weights[id]
     if (sim.clock.night && id === 'wood') w += CUSTOMERS.nightWoodBonus
     if (sim.clock.night && id === 'coat') w += CUSTOMERS.nightCoatBonus
+    // market pressure: a hot stall draws more of the crowd
+    w *= Math.sqrt(st.demand)
     // a stall piled high draws the crowd
     if (sim.rep.level >= CUSTOMERS.bulkMinLevel)
       w *= 1 + CUSTOMERS.bulkPull * Math.min(1, st.stock / CUSTOMERS.bulkPullStock)
@@ -119,10 +124,12 @@ function trySpawnCustomer(sim: Sim) {
   const least = Math.ceil(most / 2)
   // ...and a stall piled high with stock sells in bulk
   const bulk = bulkDemand(sim.rep.level, st.stock, most)
-  const want = Math.min(
+  const base = Math.min(
     CUSTOMERS.demandCap,
     (vip ? most : least + Math.floor(Math.random() * (most - least + 1))) + bulk,
   )
+  // a bigger settlement is hungrier (×√level), and market pressure adds more on top
+  const want = Math.max(1, Math.min(PRESSURE.maxWant, Math.round(base * levelDemandMult(sim.rep.level) * st.demand)))
   const c: CustomerSim = {
     id: sim.ids++,
     pos: {
@@ -169,6 +176,29 @@ function handOver(sim: Sim, c: CustomerSim, st: StationSim) {
     return
   }
   serve(sim, c, st)
+}
+
+/** gave up waiting: a lost sale, a broken rush */
+function walkAway(sim: Sim, c: CustomerSim, st: StationSim) {
+  // half a bundle handed over: they pay for what they got and go (no tip, rush broken)
+  if (c.got > 0) {
+    c.want = c.got
+    serve(sim, c, st)
+    return
+  }
+  c.state = 'leaving'
+  if (st.slots[c.slot] === c.id) st.slots[c.slot] = null
+  c.mood = 'angry'
+  c.moodT = 1.6
+  sim.stats.lostSales++
+  sim.stats.angry++
+  if (sim.rush.n >= RUSH.announceEvery) {
+    sim.fx.push({ t: 'text', x: st.pos.x, y: 3.6, z: st.pos.z, str: '💔 RUSH LOST', color: '#ff8a7a', size: 1.1 })
+  }
+  sim.rush.n = 0
+  sim.rush.t = 0
+  sim.fx.push({ t: 'text', x: c.pos.x, y: 2.4, z: c.pos.z, str: '💢 walked away', color: '#ff9a8a', size: 0.75 })
+  sfx.angry()
 }
 
 function serve(sim: Sim, c: CustomerSim, st: StationSim) {
@@ -286,6 +316,11 @@ export function updateCustomers(sim: Sim, dt: number) {
       const arrived = seek(c, slotPos(st, c.slot), c.speed * 0.9, dt, 0.12)
       if (!arrived) c.walkPhase += dt * c.speed * 2.2
       if (st.stock === 0) c.starveT += dt
+      // under market pressure, nobody waits forever at an empty counter
+      if (pressureOn(sim) && c.starveT > PRESSURE.walkAway) {
+        walkAway(sim, c, st)
+        continue
+      }
 
       if (c.slot === 0 && arrived && st.stock > 0) {
         // an upgraded stall can hand over several items in one frame
