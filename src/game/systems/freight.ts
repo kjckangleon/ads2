@@ -4,7 +4,7 @@
 // product belts or carried in by hand) and pays onto the terminal's pile.
 
 import type { Sim, VehicleSim, TerminalSim, FreightLine, RoutePt, VehicleKind } from '../types'
-import { FREIGHT, PARK, freightPrice, starSalesMult } from '../balance'
+import { FREIGHT, PARK, freightPrice, freightOrderCapacity, starSalesMult } from '../balance'
 import { RES_ICON } from '../icons'
 import { fmt } from '../format'
 import { sfx } from '../audio'
@@ -173,7 +173,7 @@ function freeTruckSlot(sim: Sim): number {
 
 function truckWant(sim: Sim) {
   const lvl = Math.max(0, sim.rep.level - 12)
-  return Math.min(T.maxWant, Math.round(T.baseWant + T.wantPerLevel * lvl + Math.random() * 4))
+  return freightOrderCapacity(Math.round(T.baseWant + T.wantPerLevel * lvl + Math.random() * 4), T.maxWant, sim.terminals.dock.level)
 }
 
 function spawnTruck(sim: Sim) {
@@ -224,13 +224,13 @@ function updateTruck(sim: Sim, v: VehicleSim, dt: number) {
 
 function shipOrder(sim: Sim): FreightLine[] {
   const lvl = Math.max(0, sim.rep.level - 14)
-  const need = Math.min(SHIP.max, Math.round(SHIP.base + SHIP.perShip * sim.freight.ships + SHIP.perLevel * lvl))
+  const need = freightOrderCapacity(SHIP.base + SHIP.perShip * sim.freight.ships + SHIP.perLevel * lvl, SHIP.max, sim.terminals.port.level)
   return [{ kind: 'steel', need, got: 0 }]
 }
 
 function planeOrder(sim: Sim): FreightLine[] {
   const lvl = Math.max(0, sim.rep.level - 16)
-  const need = Math.min(PLANE.max, Math.round(PLANE.base + PLANE.perPlane * sim.freight.planes + PLANE.perLevel * lvl))
+  const need = freightOrderCapacity(PLANE.base + PLANE.perPlane * sim.freight.planes + PLANE.perLevel * lvl, PLANE.max, sim.terminals.air.level)
   return [
     { kind: 'jacket', need, got: 0 },
     { kind: 'canned', need: Math.round(need * 1.5), got: 0 },
@@ -242,7 +242,9 @@ function updateBig(sim: Sim, v: VehicleSim, t: TerminalSim, dt: number, cfg: typ
   if (v.state === 'arrive') {
     if (drive(v, dt)) {
       v.state = 'load'
-      v.timer = v.maxTimer = cfg.timer
+      // Endless capacity upgrades must leave enough time to physically load the order.
+      const loadSeconds = v.order.reduce((sum, line) => sum + line.need - line.got, 0) * t.loadTime / 2
+      v.timer = v.maxTimer = Math.max(cfg.timer, Math.ceil(loadSeconds * 1.25))
       sfx.fanfare()
     }
     return

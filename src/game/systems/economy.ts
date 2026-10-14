@@ -38,6 +38,7 @@ import {
   MACHINE_CFG,
   PARK,
   TERMINAL_CFG,
+  FREIGHT,
   terminalCap,
   terminalLoadTime,
 } from '../balance'
@@ -375,7 +376,10 @@ function upgradeTerminal(sim: Sim, id: TerminalId) {
   t.cap = terminalCap(t.level)
   t.loadTime = terminalLoadTime(t.level)
   sim.fx.push({ t: 'burst', x: t.pos.x, y: 1.6, z: t.pos.z, color: '#b0e0ff', n: 16, spread: 1.6 })
-  if (t.cap === UNLIMITED) banner(sim, '♾️ Unlimited storage!', `The ${TERMINAL_CFG[id].name} is maxed`, 'good')
+  if (t.level === FREIGHT.maxLevel) banner(sim, '♾️ Unlimited storage!', `The ${TERMINAL_CFG[id].name} can keep upgrading`, 'good')
+  const capacity = Math.round((1 + FREIGHT.orderCapacityPerLevel * t.level) * 100)
+  const icon = id === 'dock' ? '🚚' : id === 'port' ? '🚢' : '✈️'
+  banner(sim, `${icon} Larger cargo orders!`, `Next dispatch: ${capacity}% of base capacity`, 'good')
   sfx.build()
 }
 

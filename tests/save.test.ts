@@ -327,3 +327,85 @@ test('prestige without enough earnings leaves the current game playable', () => 
   tick(old, 1 / 60)
   assert.ok(old.time > 0)
 })
+
+function freightCamp(kind: 'truck' | 'ship' | 'plane', upgrades: number, completed = 0) {
+  const sim = createSim()
+  grantPad(sim, 'zone_industry')
+  grantPad(sim, 'zone_port')
+  grantPad(sim, 'zone_airport')
+  sim.rep.level = kind === 'truck' ? 12 : kind === 'ship' ? 14 : 16
+  sim.freight.trucks = sim.freight.ships = sim.freight.planes = completed
+  const pad = kind === 'truck' ? 'dock_up' : kind === 'ship' ? 'port_up' : 'air_up'
+  for (let i = 0; i < upgrades; i++) grantPad(sim, pad)
+  return sim
+}
+
+function dispatch(sim: Sim, kind: 'truck' | 'ship' | 'plane') {
+  sim.freight.truckT = sim.freight.shipT = sim.freight.planeT = 0
+  updateFreight(sim, 1 / 60)
+  return sim.freight.vehicles.find((v) => v.kind === kind)!
+}
+
+test('truck, ship and plane cargo capacity grows with each terminal upgrade', () => {
+  const random = Math.random
+  Math.random = () => 0.25
+  try {
+    for (const kind of ['truck', 'ship', 'plane'] as const) {
+      let previous = 0
+      for (const level of [0, 1, 5, 10, 11, 20]) {
+        const sim = freightCamp(kind, level)
+        const v = dispatch(sim, kind)
+        const base = kind === 'truck' ? 7 : kind === 'ship' ? 40 : 12
+        const expected = Math.round(base * (1 + 0.2 * level))
+        assert.equal(v.order[0].need, expected)
+        assert.ok(v.order[0].need > previous, `${kind} level ${level}`)
+        if (kind === 'plane') assert.equal(v.order[1].need, Math.round(expected * 1.5))
+        previous = v.order[0].need
+      }
+    }
+  } finally { Math.random = random }
+})
+
+test('old freight order ceilings scale with terminal upgrades', () => {
+  for (const kind of ['truck', 'ship', 'plane'] as const) {
+    const sim = freightCamp(kind, 10, 1000)
+    sim.rep.level = 200
+    const v = dispatch(sim, kind)
+    const oldMax = kind === 'truck' ? FREIGHT.truck.maxWant : FREIGHT[kind].max
+    assert.equal(v.order[0].need, oldMax * 3)
+  }
+})
+
+test('terminal capacity upgrades survive saves and leave active orders fixed', () => {
+  const random = Math.random
+  Math.random = () => 0.25
+  try {
+    for (const kind of ['truck', 'ship', 'plane'] as const) {
+      const sim = freightCamp(kind, 0)
+      const active = dispatch(sim, kind)
+      const before = active.order.map((line) => ({ ...line }))
+      const pad = kind === 'truck' ? 'dock_up' : kind === 'ship' ? 'port_up' : 'air_up'
+      grantPad(sim, pad)
+      assert.deepEqual(active.order, before)
+      saveNow(sim)
+      const next = reload()
+      assert.ok(dispatch(next, kind).order[0].need > before[0].need)
+    }
+  } finally { Math.random = random }
+})
+
+test('large upgraded ship and plane orders can finish loading before timeout', () => {
+  for (const kind of ['ship', 'plane'] as const) {
+    const sim = freightCamp(kind, 50, 1000)
+    const terminal = kind === 'ship' ? sim.terminals.port : sim.terminals.air
+    for (const k of terminal.kinds) terminal.stock[k] = 100_000
+    const v = dispatch(sim, kind)
+    advanceFreightUntil(sim, () => v.state === 'load', 30)
+    const minimumLoad = v.order.reduce((sum, o) => sum + o.need, 0) * terminal.loadTime / 2
+    assert.ok(v.maxTimer >= minimumLoad * 1.25)
+    advanceFreightUntil(sim, () => v.state === 'leave', v.maxTimer + 1)
+    assert.ok(v.order.every((o) => o.got === o.need), kind)
+    const pay = Math.round(v.order.reduce((sum, o) => sum + o.got * freightPrice(o.kind, terminal.level), 0) * (1 + FREIGHT[kind].bonus))
+    assert.equal(sim.piles.find((p) => p.id === terminal.pile)!.value, pay)
+  }
+})
