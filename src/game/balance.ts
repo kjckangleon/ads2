@@ -393,11 +393,14 @@ export const ANIMALS = {
   /** every level past this adds a deer */
   deerFromLevel: 4,
   deerMax: 18,
-  /** tower stops hunting game while this much raw meat lies uncollected */
+  /** the most raw meat the meadow holds; past it the oldest piece spoils */
   maxGroundMeat: 45,
   maxGroundHides: 20,
   /** uncollected hides spoil so they never clog the meadow */
   hideLifetime: 60,
+  /** ...and so does old meat once a pile builds up, so the tower always gets back to hunting */
+  meatLifetime: 75,
+  meatKeep: 12,
 }
 
 export const WOLVES = {

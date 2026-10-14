@@ -6,6 +6,14 @@ import { spawnAnimal } from '../state'
 import { sfx } from '../audio'
 
 export function dropItem(sim: Sim, kind: 'raw' | 'hide', at: V2, spread: number) {
+  // the meadow holds so much meat: a fresh kill pushes the oldest piece off to spoil
+  if (kind === 'raw' && countDrops(sim, 'raw') >= ANIMALS.maxGroundMeat) {
+    let old = -1
+    sim.drops.forEach((d, i) => {
+      if (d.kind === 'raw' && d.reservedBy === null && (old < 0 || d.age > sim.drops[old].age)) old = i
+    })
+    if (old >= 0) sim.drops.splice(old, 1)
+  }
   sim.drops.push({
     id: sim.ids++,
     kind,
@@ -289,10 +297,16 @@ export function updateAnimals(sim: Sim, dt: number) {
   regrow(sim.holes, dt)
   regrow(sim.seams, dt)
 
+  let meat = countDrops(sim, 'raw')
   for (let i = sim.drops.length - 1; i >= 0; i--) {
     const d = sim.drops[i]
     d.age += dt
-    if (d.kind === 'hide' && d.reservedBy === null && d.age > ANIMALS.hideLifetime) {
+    const spoiled =
+      d.reservedBy === null &&
+      (d.kind === 'hide'
+        ? d.age > ANIMALS.hideLifetime
+        : meat > ANIMALS.meatKeep && d.age > ANIMALS.meatLifetime && meat-- > 0)
+    if (spoiled) {
       sim.drops.splice(i, 1)
       sim.fx.push({ t: 'burst', x: d.pos.x, y: 0.2, z: d.pos.z, color: '#b8a58a', n: 5, spread: 0.4, up: 1 })
     }

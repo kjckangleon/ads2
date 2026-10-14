@@ -1,8 +1,8 @@
 import type { Sim, V2 } from '../types'
-import { TOWER, ANIMALS, towerDamage, towerCooldown, towerRange, towerArrows } from '../balance'
+import { TOWER, towerDamage, towerCooldown, towerRange, towerArrows } from '../balance'
 import { dist, lerpAngle, damp } from '../util'
 import { sfx } from '../audio'
-import { hurtAnimal, countDrops } from './animals'
+import { hurtAnimal } from './animals'
 import { damageWolf } from './wolves'
 import { perk } from '../perks'
 
@@ -15,18 +15,16 @@ interface Target {
   key: number
 }
 
-function findTargets(sim: Sim, range: number, count: number, huntGame: boolean): Target[] {
+function findTargets(sim: Sim, range: number, count: number): Target[] {
   const t = sim.tower
   const out: Target[] = []
   for (const w of sim.wolves) {
     const d = dist(w.pos, t.pos)
     if (d <= range) out.push({ id: w.id, pos: w.pos, key: d - 1000 })
   }
-  if (huntGame) {
-    for (const a of sim.animals) {
-      const d = dist(a.pos, t.pos)
-      if (d <= range) out.push({ id: a.id, pos: a.pos, key: d })
-    }
+  for (const a of sim.animals) {
+    const d = dist(a.pos, t.pos)
+    if (d <= range) out.push({ id: a.id, pos: a.pos, key: d })
   }
   out.sort((a, b) => a.key - b.key)
   return out.slice(0, count)
@@ -78,9 +76,6 @@ export function updateTower(sim: Sim, dt: number) {
   const range = towerRange(t.rngLvl)
   const dmg = towerDamage(t.dmgLvl)
   const arrows = towerArrows(t.dmgLvl + t.spdLvl + t.rngLvl) + perk(sim, 'arrows')
-  // stop hunting game while the meadow is littered with uncollected meat
-  // (wolves are always fair game)
-  const huntGame = countDrops(sim, 'raw') < ANIMALS.maxGroundMeat
 
   for (let i = t.pending.length - 1; i >= 0; i--) {
     const p = t.pending[i]
@@ -92,7 +87,7 @@ export function updateTower(sim: Sim, dt: number) {
     }
   }
 
-  const targets = findTargets(sim, range, arrows, huntGame)
+  const targets = findTargets(sim, range, arrows)
   const primary = targets[0] ?? null
   t.targetId = primary?.id ?? null
 
