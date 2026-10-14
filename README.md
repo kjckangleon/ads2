@@ -89,6 +89,26 @@ Once food runs itself, new pressure and new goals arrive in turn:
 - **Crew upgrades.** Worker Boots / Worker Packs make every worker faster and
   carry more; Wild Game raises the deer population. The camera pulls back as
   the settlement grows.
+- **Conveyor belts** (Level 5+). Buy a belt and items ride on their own from
+  the log pile / kitchen / tailor / smokehouse / coal pile to their stall or
+  the furnace. Upgrades speed them up; a full stall backs the line up.
+- **Ice Fishery** (Level 6, northwest). Fish the holes on the frozen pond,
+  smoke the catch at the Smokehouse, sell it at the Fish stall. Hire a Fisher,
+  Smoker and Fish Runners.
+- **Coal Mine** (Level 8, north). Mine coal seams, feed the Great Furnace by
+  camp: while it burns, every sale pays +25% (more with Furnace upgrades).
+  Hire Miners and Coal Carriers.
+- **Big game.** Mountain goats (Level 5+) and bears (Level 7+) join the deer;
+  they take many hits, drop more meat and hides, and a hurt bear charges and
+  swipes you away. More animals roam as the settlement grows.
+- **Hungrier survivors.** From Level 4 each survivor buys a bundle (up to 5
+  items, VIPs always the most), shown as ×N over their head.
+- **Unlimited storage.** A stall or workshop at its max level (Lv10) never
+  fills up.
+- **Task board** (Level 3+). Three rotating goals (sell X fish, hunt a bear,
+  hit a rush...) pay cash + XP and are replaced by new ones scaled to your
+  level. Every level-up also pays a cash gift, and once the objective track is
+  done it always points at the next upgrade worth buying.
 
 Ground chevrons around the player point at the current objective (gold), a
 raiding wolf (red) and a waiting caravan (teal).

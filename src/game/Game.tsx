@@ -1,6 +1,7 @@
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
+import { PerformanceMonitor } from '@react-three/drei'
 import * as THREE from 'three'
-import { useUI } from './uiStore'
+import { useUI, type Quality } from './uiStore'
 import { SimDriver } from '../render/SimDriver'
 import { CameraRig } from '../render/CameraRig'
 import { DayNight } from '../render/DayNight'
@@ -22,6 +23,30 @@ import { PlayerView } from '../render/PlayerView'
 import { ArrowsView } from '../render/ArrowsView'
 import { GuidesView } from '../render/GuidesView'
 import { FxView } from '../render/FxView'
+import { BeltsView } from '../render/BeltsView'
+import { FurnaceView } from '../render/FurnaceView'
+import { NodesView } from '../render/NodesView'
+
+// Phones have 2-3x screens; rendering at 1x there looks pixelated, so even low
+// quality renders above 1x and the adaptive monitor trades it back for frame rate.
+const MAX_DPR: Record<Quality, number> = { low: 1.5, medium: 2, high: 2 }
+const MIN_DPR = 1
+
+function startDpr(quality: Quality) {
+  return Math.min(window.devicePixelRatio || 1, MAX_DPR[quality])
+}
+
+/** Steps the render resolution down when frames drop and back up when they recover. */
+function AdaptiveResolution({ quality }: { quality: Quality }) {
+  const setDpr = useThree((s) => s.setDpr)
+  return (
+    <PerformanceMonitor
+      onDecline={() => setDpr(MIN_DPR + (startDpr(quality) - MIN_DPR) * 0.5)}
+      onIncline={() => setDpr(startDpr(quality))}
+      onFallback={() => setDpr(MIN_DPR)}
+    />
+  )
+}
 
 export function Game() {
   const quality = useUI((s) => s.quality)
@@ -30,7 +55,7 @@ export function Game() {
     <Canvas
       key={quality}
       shadows={shadows}
-      dpr={quality === 'high' ? [1, 2] : quality === 'medium' ? [1, 1.5] : 1}
+      dpr={startDpr(quality)}
       camera={{ fov: 42, near: 0.5, far: 260, position: [0, 21.5, 19.5] }}
       gl={{
         antialias: quality !== 'low',
@@ -41,6 +66,7 @@ export function Game() {
         gl.toneMappingExposure = 1.05
       }}
     >
+      <AdaptiveResolution quality={quality} />
       <color attach="background" args={['#cdd8e6']} />
       <fog attach="fog" args={['#cdd8e6', 60, 150]} />
       <DayNight shadows={shadows} quality={quality} />
@@ -49,9 +75,12 @@ export function Game() {
       <Environment />
       <ZoneView />
       <TreesView />
+      <NodesView />
       <StationsView />
       <DepotView />
       <ProcessorsView />
+      <FurnaceView />
+      <BeltsView />
       <TowerView />
       <CaravanView />
       <PadsView />

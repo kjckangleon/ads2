@@ -30,6 +30,8 @@ function makeOrder(sim: Sim): CaravanOrder[] {
   const kinds: ResKind[] = ['log']
   if (sim.proc.kitchen.unlocked) kinds.push('cooked')
   if (sim.proc.tailor.unlocked) kinds.push('coat')
+  if (sim.proc.smokehouse.unlocked) kinds.push('smoked')
+  if (sim.furnace.built) kinds.push('coal')
   for (let i = kinds.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
     ;[kinds[i], kinds[j]] = [kinds[j], kinds[i]]

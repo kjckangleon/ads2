@@ -11,6 +11,8 @@ import type {
   PileSim,
   PileId,
   CustomerSim,
+  BeltId,
+  BeltSim,
   V2,
 } from './types'
 import {
@@ -18,6 +20,11 @@ import {
   STATION_CFG,
   PROC_CFG,
   TREES,
+  NODES,
+  HOLE_SPOTS,
+  SEAM_SPOTS,
+  BELT_IDS,
+  BELT_CFG,
   ANIMALS,
   CARAVAN,
   CUSTOMERS,
@@ -33,6 +40,8 @@ import {
   procOutCap,
   playerSpeed,
   playerCarry,
+  animalHp,
+  furnaceCap,
 } from './balance'
 import { mulberry32, randRange } from './util'
 
@@ -108,11 +117,45 @@ function makeTrees(): TreeSim[] {
   return trees
 }
 
+function makeNodes(spots: V2[], per: number): TreeSim[] {
+  return spots.map((p, i) => ({
+    id: i,
+    pos: { x: p.x, z: p.z },
+    wood: per,
+    maxWood: per,
+    regrowT: 0,
+    shake: 0,
+    reservedBy: null,
+    scale: 0.9 + ((i * 37) % 10) * 0.025,
+  }))
+}
+
+function makeBelt(id: BeltId): BeltSim {
+  const cfg = BELT_CFG[id]
+  const dists = [0]
+  for (let i = 1; i < cfg.path.length; i++) {
+    const a = cfg.path[i - 1]
+    const b = cfg.path[i]
+    dists.push(dists[i - 1] + Math.hypot(b.x - a.x, b.z - a.z))
+  }
+  return {
+    id,
+    kind: cfg.kind,
+    level: 0,
+    path: cfg.path.map((p) => ({ x: p.x, z: p.z })),
+    dists,
+    length: dists[dists.length - 1],
+    items: [],
+    blockedT: 0,
+    pulse: 0,
+  }
+}
+
 export function spawnAnimal(sim: Sim, kind: AnimalKind): AnimalSim {
   const m = WORLD.meadow
   const ang = Math.random() * Math.PI * 2
   const r = Math.sqrt(Math.random()) * (m.r - 1)
-  const hp = kind === 'deer' ? ANIMALS.deerHp : ANIMALS.rabbitHp
+  const hp = animalHp(kind, sim.rep.level)
   const a: AnimalSim = {
     id: sim.ids++,
     kind,
@@ -125,6 +168,7 @@ export function spawnAnimal(sim: Sim, kind: AnimalKind): AnimalSim {
     t: Math.random() * 2,
     hitFlash: 0,
     walkPhase: Math.random() * 6,
+    atkT: 0,
   }
   sim.animals.push(a)
   return a
@@ -147,6 +191,7 @@ function makePads(): PadSim[] {
     level: 0,
     maxLevel: d.maxLevel,
     pulse: 0,
+    hold: 0,
   }))
 }
 
@@ -192,12 +237,16 @@ export function createSim(): Sim {
       wood: makeStation('wood', WORLD.woodStation, true),
       meat: makeStation('meat', WORLD.meatStation, false),
       coat: makeStation('coat', WORLD.coatStation, false),
+      fish: makeStation('fish', WORLD.fishStation, false),
     },
     proc: {
       kitchen: makeProcessor('kitchen', WORLD.kitchen, false),
       tailor: makeProcessor('tailor', WORLD.tailor, false),
+      smokehouse: makeProcessor('smokehouse', WORLD.smokehouse, false),
     },
     trees: makeTrees(),
+    holes: makeNodes(HOLE_SPOTS, NODES.hole.per),
+    seams: makeNodes(SEAM_SPOTS, NODES.seam.per),
     animals: [],
     animalRespawnT: 0,
     wolves: [],
@@ -220,12 +269,29 @@ export function createSim(): Sim {
     },
     pads: makePads(),
     chest: { pos: { x: WORLD.chest.x, z: WORLD.chest.z } },
-    depot: { pos: { x: WORLD.logDepot.x, z: WORLD.logDepot.z }, count: 0, cap: WORKERS.depotCap },
+    depot: { pos: { x: WORLD.logDepot.x, z: WORLD.logDepot.z }, count: 0, cap: WORKERS.depotCap, kind: 'log' },
+    coalDepot: { pos: { x: WORLD.coalDepot.x, z: WORLD.coalDepot.z }, count: 0, cap: WORKERS.coalDepotCap, kind: 'coal' },
+    belts: Object.fromEntries(BELT_IDS.map((id) => [id, makeBelt(id)])) as Record<BeltId, BeltSim>,
+    furnace: {
+      built: false,
+      pos: { x: WORLD.furnace.x, z: WORLD.furnace.z },
+      feed: { x: WORLD.furnaceFeed.x, z: WORLD.furnaceFeed.z },
+      fuel: 0,
+      cap: furnaceCap(0),
+      burnT: 0,
+      level: 0,
+      burning: false,
+    },
     stats: {
       served: 0,
       woodServed: 0,
       meatServed: 0,
       coatServed: 0,
+      fishServed: 0,
+      coalBurned: 0,
+      bearKills: 0,
+      bought: 0,
+      tasksDone: 0,
       kills: 0,
       earned: 0,
       collected: 0,
@@ -256,10 +322,11 @@ export function createSim(): Sim {
       earned: 0,
       count: 0,
     },
-    zones: { tannery: false },
+    zones: { tannery: false, fishery: false, mine: false },
     lodge: { spdLvl: 0, capLvl: 0 },
     game: { lvl: 0 },
     guides: [],
+    tasks: [],
     banners: [],
     banner: { text: '', sub: '', tone: 'info', id: 0 },
     bannerT: 0,
@@ -284,6 +351,8 @@ function seedQueue(sim: Sim) {
       slot: i,
       laneOff: 0,
       serveT: 0,
+      want: 1,
+      got: 0,
       starveT: 0,
       carrying: null,
       speed: CUSTOMERS.speed,

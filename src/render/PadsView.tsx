@@ -8,6 +8,7 @@ import { sim } from '../game/state'
 import { TextLabel, makeEmojiSprite, emojiTexture } from './rutil'
 import { damp } from '../game/util'
 import { fmt } from '../game/format'
+import { ECONOMY } from '../game/balance'
 
 interface PadVisual {
   root: THREE.Group
@@ -17,6 +18,7 @@ interface PadVisual {
   icon: THREE.Sprite
   nameLabel: TextLabel
   costLabel: TextLabel
+  holdArc: THREE.Mesh
   scale: number
 }
 
@@ -51,6 +53,20 @@ const baseGeo = new THREE.CylinderGeometry(1.35, 1.45, 0.1, 28)
 const fillGeo = new THREE.CylinderGeometry(1, 1, 0.06, 24)
 const ringGeo = new THREE.RingGeometry(1.36, 1.52, 32)
 
+// Hold countdown: an arc that sweeps clockwise from the far edge before paying starts.
+const HOLD_STEPS = 32
+const holdArcGeos = Array.from({ length: HOLD_STEPS + 1 }, (_, i) => {
+  // keep thetaLength positive (a negative sweep flips the winding and gets culled)
+  const len = (i / HOLD_STEPS) * Math.PI * 2
+  return new THREE.RingGeometry(1.56, 1.78, 48, 1, Math.PI / 2 - len, len)
+})
+const holdArcMat = new THREE.MeshBasicMaterial({
+  color: '#ffe680',
+  transparent: true,
+  opacity: 0.95,
+  depthWrite: false,
+})
+
 function makePadVisual(): PadVisual {
   const root = new THREE.Group()
   const base = new THREE.Mesh(baseGeo, baseMat)
@@ -65,6 +81,12 @@ function makePadVisual(): PadVisual {
   ring.position.y = 0.115
   ring.renderOrder = 2
   root.add(ring)
+  const holdArc = new THREE.Mesh(holdArcGeos[0], holdArcMat)
+  holdArc.rotation.x = -Math.PI / 2
+  holdArc.position.y = 0.12
+  holdArc.renderOrder = 3
+  holdArc.visible = false
+  root.add(holdArc)
   const icon = makeEmojiSprite('❔', 0.95)
   icon.position.y = 2.35
   root.add(icon)
@@ -75,7 +97,7 @@ function makePadVisual(): PadVisual {
   costLabel.sprite.position.y = 1.15
   root.add(costLabel.sprite)
   root.visible = false
-  return { root, base, fill, ring, icon, nameLabel, costLabel, scale: 0 }
+  return { root, base, fill, ring, icon, nameLabel, costLabel, holdArc, scale: 0 }
 }
 
 export function PadsView() {
@@ -100,6 +122,10 @@ export function PadsView() {
       const remaining = Math.max(0, Math.ceil(pad.cost - pad.paid))
       v.ring.material = pad.locked ? ringMatLocked : sim.money >= 1 ? ringMatAfford : ringMatPoor
       v.base.material = pad.locked ? baseMatLocked : baseMat
+
+      const hold = pad.locked ? 0 : pad.hold / ECONOMY.padHoldSeconds
+      v.holdArc.visible = hold > 0 && hold < 1
+      if (v.holdArc.visible) v.holdArc.geometry = holdArcGeos[Math.round(hold * HOLD_STEPS)]
 
       const frac = pad.locked ? 0 : pad.paid / pad.cost
       v.fill.visible = frac > 0

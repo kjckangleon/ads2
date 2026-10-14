@@ -2,7 +2,7 @@
 // Upgrade pads marked `gated` stop at the settlement-level cap and show a
 // lock until the settlement grows.
 
-import type { Sim, PadSim, StationId, ProcessorId, WorkerRole } from '../types'
+import type { Sim, PadSim, StationId, ProcessorId, WorkerRole, BeltId } from '../types'
 import {
   PAD_BY_ID,
   padCost,
@@ -19,6 +19,9 @@ import {
   playerSpeed,
   playerCarry,
   upgradeCap,
+  furnaceCap,
+  furnaceBonus,
+  UNLIMITED,
 } from '../balance'
 import { dist } from '../util'
 import { sfx, haptic } from '../audio'
@@ -80,9 +83,46 @@ function padVisible(sim: Sim, pad: PadSim): boolean {
       return sim.zones.tannery && s.coatServed >= 2
     case 'tailor_up':
       return sim.zones.tannery && hasWorker(sim, 'tailor')
+    // conveyor belts: late-game automation, once the chain they replace exists
+    case 'belt_wood':
+      return beltsReady(sim) && hasWorker(sim, 'lumberjack')
+    case 'belt_meat':
+      return beltsReady(sim) && sim.proc.kitchen.unlocked
+    case 'belt_coat':
+      return beltsReady(sim) && sim.zones.tannery
+    case 'belt_fish':
+      return beltsReady(sim) && sim.zones.fishery
+    case 'belt_coal':
+      return beltsReady(sim) && sim.zones.mine
+    case 'zone_fishery':
+      return !sim.zones.fishery && sim.zones.tannery && sim.rep.level >= REP.fisheryLevel
+    case 'fisher':
+    case 'smoker':
+    case 'fishRunner':
+    case 'smoke_up':
+      return sim.zones.fishery
+    case 'fish_up':
+      return sim.zones.fishery && s.fishServed >= 2
+    case 'zone_mine':
+      return !sim.zones.mine && sim.zones.fishery && sim.rep.level >= REP.mineLevel
+    case 'miner':
+    case 'coalCarrier':
+      return sim.zones.mine
+    case 'furnace_up':
+      return sim.zones.mine && s.coalBurned >= 5
     default:
       return false
   }
+}
+
+const beltsReady = (sim: Sim) => sim.rep.level >= REP.beltLevel
+
+const BELT_PADS: Record<string, BeltId> = {
+  belt_wood: 'wood',
+  belt_meat: 'meat',
+  belt_coat: 'coat',
+  belt_fish: 'fish',
+  belt_coal: 'coal',
 }
 
 /**
@@ -105,6 +145,13 @@ function padPreview(sim: Sim, pad: PadSim): string | null {
       return sim.stations.meat.unlocked && !sim.tower.built ? 'Sell your first meat' : null
     case 'guard':
       return hasWorker(sim, 'runner') ? 'Comes with the first night' : null
+    // tease the belts as soon as the chain exists, so players know they're coming
+    case 'belt_wood':
+      return hasWorker(sim, 'lumberjack') ? `Needs ⭐ Level ${REP.beltLevel}` : null
+    case 'belt_meat':
+      return sim.proc.kitchen.unlocked ? `Needs ⭐ Level ${REP.beltLevel}` : null
+    case 'belt_coat':
+      return sim.zones.tannery ? `Needs ⭐ Level ${REP.beltLevel}` : null
     default:
       return null
   }
@@ -118,6 +165,7 @@ function upgradeStation(sim: Sim, id: StationId) {
   st.serviceTime = stationServiceTime(id, st.level)
   sim.fx.push({ t: 'burst', x: st.pos.x, y: 1.2, z: st.pos.z, color: '#b0e0ff', n: 14, spread: 1.2 })
   sim.fx.push({ t: 'shake', power: 0.25 })
+  if (st.capacity === UNLIMITED) banner(sim, '♾️ Unlimited storage!', 'This stall is maxed: drop off as much as you carry', 'good')
   sfx.build()
 }
 
@@ -128,6 +176,7 @@ function upgradeProc(sim: Sim, id: ProcessorId) {
   pr.inCap = procInCap(id, pr.level)
   pr.outCap = procOutCap(id, pr.level)
   sim.fx.push({ t: 'burst', x: pr.pos.x, y: 1.2, z: pr.pos.z, color: '#ffc890', n: 14, spread: 1.2 })
+  if (pr.inCap === UNLIMITED) banner(sim, '♾️ Unlimited storage!', `The ${pr.id} is maxed: it takes everything you bring`, 'good')
   sfx.build()
 }
 
@@ -142,6 +191,46 @@ function unlockTannery(sim: Sim) {
   }
   sim.fx.push({ t: 'shake', power: 0.5 })
   banner(sim, '🧥 The Tannery is open!', 'Deer now drop hides — sew them into coats', 'good')
+  sfx.build()
+}
+
+function unlockFishery(sim: Sim) {
+  sim.zones.fishery = true
+  sim.proc.smokehouse.unlocked = true
+  sim.stations.fish.unlocked = true
+  const f = ZONES.fishery.focus
+  sim.focus = { x: f.x, z: f.z, t: 2.6 }
+  for (const p of [sim.proc.smokehouse.pos, sim.stations.fish.pos]) {
+    sim.fx.push({ t: 'burst', x: p.x, y: 1, z: p.z, color: '#cfeaff', n: 24, spread: 1.8 })
+  }
+  sim.fx.push({ t: 'shake', power: 0.5 })
+  banner(sim, '🎣 The Ice Fishery is open!', 'Fish the holes, smoke the catch, sell it west', 'good')
+  sfx.build()
+}
+
+function unlockMine(sim: Sim) {
+  sim.zones.mine = true
+  sim.furnace.built = true
+  const f = ZONES.mine.focus
+  sim.focus = { x: f.x, z: f.z, t: 2.6 }
+  const fp = sim.furnace.pos
+  sim.fx.push({ t: 'burst', x: fp.x, y: 1.4, z: fp.z, color: '#ffb35a', n: 30, spread: 2 })
+  sim.fx.push({ t: 'shake', power: 0.6 })
+  banner(sim, '⛏️ The Coal Mine is open!', `Keep the furnace lit: every sale +${Math.round(furnaceBonus(0) * 100)}%`, 'good')
+  sfx.build()
+}
+
+function buildBelt(sim: Sim, id: BeltId, level: number) {
+  const b = sim.belts[id]
+  const first = b.level === 0
+  b.level = level
+  const mid = b.path[Math.floor(b.path.length / 2)]
+  sim.fx.push({ t: 'burst', x: mid.x, y: 0.6, z: mid.z, color: '#cfd8e6', n: 20, spread: 2 })
+  if (first) {
+    sim.focus = { x: mid.x, z: mid.z, t: 1.8 }
+    sim.fx.push({ t: 'shake', power: 0.3 })
+    banner(sim, '⚙️ Conveyor belt running!', 'It hauls on its own — upgrade it to go faster', 'good')
+  }
   sfx.build()
 }
 
@@ -176,6 +265,11 @@ export function applyPad(sim: Sim, pad: PadSim) {
     case 'guard':
     case 'tailor':
     case 'coatRunner':
+    case 'fisher':
+    case 'smoker':
+    case 'fishRunner':
+    case 'miner':
+    case 'coalCarrier':
       hireWorker(sim, pad.id, pad.pos)
       sfx.buy()
       break
@@ -187,6 +281,33 @@ export function applyPad(sim: Sim, pad: PadSim) {
       break
     case 'coat_up':
       upgradeStation(sim, 'coat')
+      break
+    case 'fish_up':
+      upgradeStation(sim, 'fish')
+      break
+    case 'smoke_up':
+      upgradeProc(sim, 'smokehouse')
+      break
+    case 'furnace_up': {
+      const f = sim.furnace
+      f.level++
+      f.cap = furnaceCap(f.level)
+      sim.fx.push({ t: 'burst', x: f.pos.x, y: 1.6, z: f.pos.z, color: '#ffb35a', n: 16, spread: 1.2 })
+      sfx.build()
+      break
+    }
+    case 'zone_fishery':
+      unlockFishery(sim)
+      break
+    case 'zone_mine':
+      unlockMine(sim)
+      break
+    case 'belt_wood':
+    case 'belt_meat':
+    case 'belt_coat':
+    case 'belt_fish':
+    case 'belt_coal':
+      buildBelt(sim, BELT_PADS[pad.id], pad.level)
       break
     case 'kitchen_up':
       upgradeProc(sim, 'kitchen')
@@ -249,6 +370,7 @@ export function updateEconomy(sim: Sim, dt: number) {
     pad.visible = ready || pad.lockText !== ''
     if (!pad.visible) {
       pad.locked = false
+      pad.hold = 0
       continue
     }
     const cap = def.gated ? Math.min(def.maxLevel, upgradeCap(sim.rep.level)) : def.maxLevel
@@ -257,14 +379,24 @@ export function updateEconomy(sim: Sim, dt: number) {
     pad.pulse += dt
 
     const onPad = dist(p.pos, pad.pos) < pad.radius
-    if (!onPad) continue
+    if (!onPad) {
+      pad.hold = 0
+      continue
+    }
     if (pad.locked) {
+      pad.hold = 0
       if (p.hintCd <= 0) {
         p.hintCd = 2.5
         const why = pad.lockText || `Needs ⭐ Level ${pad.needLevel}`
         sim.fx.push({ t: 'text', x: pad.pos.x, y: 2.4, z: pad.pos.z, str: `🔒 ${why}`, color: '#9fc4ff', size: 0.9 })
         sfx.lock()
       }
+      continue
+    }
+
+    if (pad.hold < ECONOMY.padHoldSeconds) {
+      // only count down while there's money to spend, so the ring means "about to pay"
+      if (sim.money > 0) pad.hold = Math.min(pad.hold + dt, ECONOMY.padHoldSeconds)
       continue
     }
 
@@ -283,7 +415,10 @@ export function updateEconomy(sim: Sim, dt: number) {
     }
     if (pad.cost - pad.paid < 0.001) {
       pad.paid = 0
+      // the next level waits for a fresh hold, so lingering doesn't buy it too
+      pad.hold = 0
       pad.level++
+      sim.stats.bought++
       pad.done = pad.level >= def.maxLevel
       if (!pad.done) pad.cost = padCost(def, pad.level)
       applyPad(sim, pad)

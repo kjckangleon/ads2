@@ -1,10 +1,11 @@
-import type { Sim, ResKind, AnimalSim, WolfSim, DropSim, V2, PlayerSim } from '../types'
+import type { Sim, ResKind, AnimalSim, WolfSim, DropSim, V2, PlayerSim, TreeSim, DepotSim } from '../types'
 import {
   PLAYER,
   TREES,
+  NODES,
+  FURNACE,
   WORLD,
   ECONOMY,
-  ANIMALS,
   ZONES,
   ZONE_IDS,
   STATION_IDS,
@@ -16,7 +17,7 @@ import {
 import { input, pollInput } from '../input'
 import { clamp, dist, lerpAngle, damp } from '../util'
 import { sfx, haptic } from '../audio'
-import { killAnimal } from './animals'
+import { hurtAnimal } from './animals'
 import { damageWolf } from './wolves'
 import { caravanDeliver, caravanNeeds, caravanX } from './caravan'
 
@@ -40,7 +41,9 @@ function staticColliders(sim: Sim): Circle[] {
     if (pr.unlocked) c.push({ x: pr.pos.x, z: pr.pos.z, r: 1.1 })
   }
   if (sim.tower.built) c.push({ x: sim.tower.pos.x, z: sim.tower.pos.z, r: 1.0 })
+  if (sim.furnace.built) c.push({ x: sim.furnace.pos.x, z: sim.furnace.pos.z, r: FURNACE.radius })
   for (const t of sim.trees) if (t.wood > 0) c.push({ x: t.pos.x, z: t.pos.z, r: 0.42 })
+  if (sim.zones.mine) for (const t of sim.seams) if (t.wood > 0) c.push({ x: t.pos.x, z: t.pos.z, r: 0.5 })
   return c
 }
 
@@ -133,54 +136,79 @@ function move(sim: Sim, dt: number) {
   for (const box of staticBoxes(sim)) pushOutOfBox(p.pos, box, 0.35)
 
   // locked districts: push back out across the nearest barrier edge
+  // (edges outside the world bounds are far away, so they never win)
   for (const id of ZONE_IDS) {
     if (sim.zones[id]) continue
     const r = ZONES[id]
     const m = 0.45
-    if (p.pos.x > r.minX - m && p.pos.z > r.minZ - m && p.pos.x < r.maxX && p.pos.z < r.maxZ) {
-      const penX = p.pos.x - (r.minX - m)
-      const penZ = p.pos.z - (r.minZ - m)
-      if (penX < penZ) p.pos.x = r.minX - m
-      else p.pos.z = r.minZ - m
+    if (p.pos.x > r.minX - m && p.pos.x < r.maxX + m && p.pos.z > r.minZ - m && p.pos.z < r.maxZ + m) {
+      const left = p.pos.x - (r.minX - m)
+      const right = r.maxX + m - p.pos.x
+      const top = p.pos.z - (r.minZ - m)
+      const bottom = r.maxZ + m - p.pos.z
+      const pen = Math.min(left, right, top, bottom)
+      if (pen === left) p.pos.x = r.minX - m
+      else if (pen === right) p.pos.x = r.maxX + m
+      else if (pen === top) p.pos.z = r.minZ - m
+      else p.pos.z = r.maxZ + m
     }
   }
 }
 
-function chop(sim: Sim, dt: number) {
+const GATHER_FX = {
+  tree: { y: 1.2, burst: '#b08968' },
+  hole: { y: 0.2, burst: '#cfeaff' },
+  seam: { y: 0.7, burst: '#3a3a40' },
+}
+
+/** Chop pines, fish the ice holes, mine coal: whichever spot is nearest. */
+function gather(sim: Sim, dt: number) {
   const p = sim.player
-  let tree = null
+  let node: TreeSim | null = null
+  let type: keyof typeof NODES = 'tree'
   let best = TREES.chopRange
-  for (const t of sim.trees) {
-    if (t.wood <= 0) continue
-    const d = dist(p.pos, t.pos)
-    if (d < best) {
-      best = d
-      tree = t
+  const consider = (list: TreeSim[], t: keyof typeof NODES) => {
+    for (const n of list) {
+      if (n.wood <= 0) continue
+      const d = dist(p.pos, n.pos)
+      if (d < best) {
+        best = d
+        node = n
+        type = t
+      }
     }
   }
-  if (!tree) {
+  consider(sim.trees, 'tree')
+  if (sim.zones.fishery) consider(sim.holes, 'hole')
+  if (sim.zones.mine) consider(sim.seams, 'seam')
+  const n = node as TreeSim | null
+  if (!n) {
     p.chopT = 0
     return
   }
   if (!hasRoom(sim)) return
-  if (!p.moving) face(p, tree.pos, dt)
+  if (!p.moving) face(p, n.pos, dt)
+  const cfg = NODES[type]
   p.chopT += dt
-  if (p.chopT < playerChopTime(p.powerLvl)) return
+  if (p.chopT < playerChopTime(p.powerLvl) * cfg.workMult) return
   p.chopT = 0
   p.swing = 0.25
-  tree.wood--
-  tree.shake = 1
-  p.carry.push('log')
-  sfx.chop()
+  n.wood--
+  n.shake = 1
+  p.carry.push(cfg.kind)
+  if (type === 'tree') sfx.chop()
+  else if (type === 'seam') sfx.thud()
+  else sfx.pick()
   sfx.stack(p.carry.length)
+  const fx = GATHER_FX[type]
   sim.fx.push({
     t: 'itemfly',
-    kind: 'log',
-    from: { x: tree.pos.x, y: 1.2, z: tree.pos.z },
+    kind: cfg.kind,
+    from: { x: n.pos.x, y: fx.y, z: n.pos.z },
     to: { x: p.pos.x, y: 1.8 + p.carry.length * 0.24, z: p.pos.z },
   })
-  sim.fx.push({ t: 'burst', x: tree.pos.x, y: 1.0, z: tree.pos.z, color: '#b08968', n: 7, spread: 0.7 })
-  if (tree.wood <= 0) tree.regrowT = TREES.regrowTime
+  sim.fx.push({ t: 'burst', x: n.pos.x, y: fx.y, z: n.pos.z, color: fx.burst, n: 7, spread: 0.7 })
+  if (n.wood <= 0) n.regrowT = cfg.regrowTime
 }
 
 function fight(sim: Sim, dt: number) {
@@ -222,13 +250,7 @@ function fight(sim: Sim, dt: number) {
     damageWolf(sim, wolf, dmg)
     return
   }
-  if (!prey) return
-  prey.hp -= dmg
-  prey.hitFlash = 1
-  prey.state = 'flee'
-  prey.t = ANIMALS.fleeTime
-  sim.fx.push({ t: 'text', x: prey.pos.x, y: 1.6, z: prey.pos.z, str: `-${dmg}`, color: '#ff7b6b', size: 0.8 })
-  if (prey.hp <= 0) killAnimal(sim, prey)
+  if (prey) hurtAnimal(sim, prey, dmg, false)
 }
 
 function pickUpDrops(sim: Sim) {
@@ -279,6 +301,8 @@ function depositAndTake(sim: Sim) {
       hint(sim, 'Cook it first! 🔥')
     } else if (id === 'coat' && p.carry.includes('hide')) {
       hint(sim, 'Sew it at the tailor first! 🧵')
+    } else if (id === 'fish' && p.carry.includes('fish')) {
+      hint(sim, 'Smoke it first! 🔥')
     }
   }
 
@@ -321,21 +345,38 @@ function depositAndTake(sim: Sim) {
   }
 }
 
-/** Walk past the forest log pile to scoop logs off it. */
-function takeFromDepot(sim: Sim) {
+/** Walk past the forest log pile (or the mine's coal pile) to scoop from it. */
+function takeFromDepot(sim: Sim, d: DepotSim) {
   const p = sim.player
-  const d = sim.depot
   if (d.count <= 0 || p.transferCd > 0 || !hasRoom(sim)) return
   if (dist(p.pos, d.pos) >= PLAYER.depositRange) return
   d.count--
-  p.carry.push('log')
+  p.carry.push(d.kind)
   p.transferCd = PLAYER.transferInterval
   sfx.stack(p.carry.length)
   sim.fx.push({
     t: 'itemfly',
-    kind: 'log',
+    kind: d.kind,
     from: { x: d.pos.x, y: 0.6, z: d.pos.z },
     to: { x: p.pos.x, y: 1.8, z: p.pos.z },
+  })
+}
+
+/** Shovel carried coal into the furnace. */
+function feedFurnace(sim: Sim) {
+  const p = sim.player
+  const f = sim.furnace
+  if (!f.built || p.transferCd > 0 || f.fuel >= f.cap) return
+  if (dist(p.pos, f.feed) >= PLAYER.depositRange) return
+  if (!takeFromStack(p.carry, 'coal')) return
+  f.fuel++
+  p.transferCd = PLAYER.transferInterval
+  sfx.unstack(p.carry.length)
+  sim.fx.push({
+    t: 'itemfly',
+    kind: 'coal',
+    from: { x: p.pos.x, y: 1.8, z: p.pos.z },
+    to: { x: f.pos.x, y: 1.0, z: f.pos.z },
   })
 }
 
@@ -402,11 +443,13 @@ export function updatePlayer(sim: Sim, dt: number) {
   if (p.transferCd > 0) p.transferCd -= dt
   if (p.hintCd > 0) p.hintCd -= dt
   if (p.swing > 0) p.swing -= dt
-  chop(sim, dt)
+  gather(sim, dt)
   fight(sim, dt)
   pickUpDrops(sim)
   depositAndTake(sim)
-  takeFromDepot(sim)
+  takeFromDepot(sim, sim.depot)
+  if (sim.zones.mine) takeFromDepot(sim, sim.coalDepot)
+  feedFurnace(sim)
   supplyCaravan(sim)
   collectMoney(sim, dt)
 }

@@ -11,7 +11,7 @@ import { billGeo, billMat } from './PilesView'
 import { CarryStack } from './CarryStack'
 import { emojiTexture } from './rutil'
 
-const POOL = 26
+const POOL = 34
 
 interface WorkerVisual extends CharacterRig {
   role: string
@@ -101,7 +101,11 @@ export function WorkersView() {
       rig.prevPhase = w.walkPhase
       animateRig(rig, w.walkPhase, moving)
 
-      if ((w.role === 'cook' && sim.proc.kitchen.active) || (w.role === 'tailor' && sim.proc.tailor.active)) {
+      if (
+        (w.role === 'cook' && sim.proc.kitchen.active) ||
+        (w.role === 'tailor' && sim.proc.tailor.active) ||
+        (w.role === 'smoker' && sim.proc.smokehouse.active)
+      ) {
         rig.torso.rotation.z = Math.sin(sim.time * 6) * 0.08
       }
       if (w.role === 'guard') {
@@ -109,8 +113,9 @@ export function WorkersView() {
         // raise the icon on alert so raids read at a glance
         rig.icon.scale.setScalar(w.mode === 'chase' ? 0.8 : 0.55)
       }
-      // lumberjack chop bob
-      if (w.role === 'lumberjack' && w.swing > 0) rig.torso.rotation.x = Math.sin((w.swing / 0.25) * Math.PI) * 0.25
+      // chop / cast / pick bob for the gatherers
+      if ((w.role === 'lumberjack' || w.role === 'fisher' || w.role === 'miner') && w.swing > 0)
+        rig.torso.rotation.x = Math.sin((w.swing / 0.25) * Math.PI) * 0.25
       else rig.torso.rotation.x *= 0.8
 
       if (!rig.seen) {

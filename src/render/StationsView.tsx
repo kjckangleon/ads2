@@ -7,10 +7,10 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { sim } from '../game/state'
 import type { StationId } from '../game/types'
-import { STATION_IDS } from '../game/balance'
+import { STATION_IDS, capText } from '../game/balance'
 import { useUI } from '../game/uiStore'
 import { TextLabel, makeEmojiSprite, vertexColorMat } from './rutil'
-import { coatGeo, cookedMeatMat } from './characters'
+import { coatGeo, cookedMeatMat, smokedFishGeo } from './characters'
 import { ItemGrid, gridLayout } from './ItemGrid'
 import { PopIn, Squash } from './anim'
 
@@ -18,6 +18,7 @@ const STYLE: Record<StationId, { roof: string; sign: string; zoneIcon: string; z
   wood: { roof: '#4a6b52', sign: '🪵', zoneIcon: '🪵', zoneColor: '#c9a86a' },
   meat: { roof: '#8a4a3f', sign: '🍖', zoneIcon: '🍗', zoneColor: '#d98a6a' },
   coat: { roof: '#3e5a8a', sign: '🧥', zoneIcon: '🧥', zoneColor: '#8fb0e0' },
+  fish: { roof: '#2f6f7a', sign: '🐟', zoneIcon: '🍣', zoneColor: '#e0a860' },
 }
 
 const woodMat = new THREE.MeshStandardMaterial({ color: '#7a5a38', roughness: 0.9 })
@@ -51,6 +52,8 @@ function makeStockGrid(id: StationId): { grid: ItemGrid; y: number; z: number } 
       return { grid: new ItemGrid(meatGeo, cookedMeatMat, 48, gridLayout(6, 2, 0.4, 0.42, 0.18)), y: 1.05, z: 0 }
     case 'coat':
       return { grid: new ItemGrid(coatGeo(), vertexColorMat, 40, gridLayout(4, 2, 0.62, 0.42, 0.15)), y: 1.03, z: 0 }
+    case 'fish':
+      return { grid: new ItemGrid(smokedFishGeo(), vertexColorMat, 48, gridLayout(3, 2, 0.8, 0.42, 0.14)), y: 1.03, z: 0 }
   }
 }
 
@@ -206,7 +209,7 @@ function StallView({ id, withLight }: { id: StationId; withLight: boolean }) {
     const [sxz, sy] = squash.value(sim.time)
     built.root.scale.set(s * sxz, s * sy, s * sxz)
     built.stock.update(st.stock, sim.time)
-    built.label.set(`${st.stock}/${st.capacity}`, st.stock === 0 ? '#ff9a8a' : '#ffffff')
+    built.label.set(capText(st.stock, st.capacity), st.stock === 0 ? '#ff9a8a' : '#ffffff')
     for (const d of built.deco) d.obj.visible = st.level >= d.lvl
   })
 

@@ -43,6 +43,11 @@ export const WORKER_PALETTES: Record<string, CharPalette> = {
   guard: { coat: '#56607a', hat: '#363c4d', scarf: '#c0563f', skin: '#d9a072' },
   tailor: { coat: '#8a5a9e', hat: '#5e3a70', scarf: '#e8c04a', skin: '#e8b98f' },
   coatRunner: { coat: '#3e7fb0', hat: '#2a5a80', scarf: '#f0e6d0', skin: '#c98d5f' },
+  fisher: { coat: '#2f7f8f', hat: '#e8c04a', scarf: '#1f4f5a', skin: '#e8b98f' },
+  smoker: { coat: '#6a5a4a', hat: '#3a2f26', scarf: '#ff9a3a', skin: '#d9a072' },
+  fishRunner: { coat: '#4fa0b8', hat: '#2f6f80', scarf: '#f0e6d0', skin: '#c98d5f' },
+  miner: { coat: '#4a4a52', hat: '#e8c04a', scarf: '#c0563f', skin: '#d9a072' },
+  coalCarrier: { coat: '#5e5446', hat: '#2e2a26', scarf: '#e8c04a', skin: '#e8b98f' },
   trader: { coat: '#7a3f6e', hat: '#4a2a44', scarf: '#e8c04a', skin: '#d9a072' },
 }
 
@@ -144,6 +149,39 @@ export function coatGeo(): THREE.BufferGeometry {
   return coatGeoCache
 }
 
+let fishGeoCache: THREE.BufferGeometry | null = null
+let smokedGeoCache: THREE.BufferGeometry | null = null
+/** chunky fish: body, tail fin, eye — silver raw, golden-brown smoked */
+function makeFishGeo(body: string, belly: string, fin: string): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = []
+  const b = new THREE.SphereGeometry(0.16, 10, 8)
+  b.scale(2.1, 0.72, 0.8)
+  parts.push(colorGeo(b, body))
+  const bl = new THREE.SphereGeometry(0.12, 8, 6)
+  bl.scale(2.0, 0.45, 0.7)
+  bl.translate(0, -0.04, 0)
+  parts.push(colorGeo(bl, belly))
+  const tail = new THREE.ConeGeometry(0.12, 0.18, 4)
+  tail.rotateZ(Math.PI / 2)
+  tail.scale(1, 1, 0.35)
+  tail.translate(-0.4, 0, 0)
+  parts.push(colorGeo(tail, fin))
+  const eye = new THREE.SphereGeometry(0.03, 6, 5)
+  eye.translate(0.25, 0.03, 0.1)
+  parts.push(colorGeo(eye, '#1e2228'))
+  return mergeGeometries(parts)!
+}
+export function fishGeo(): THREE.BufferGeometry {
+  return (fishGeoCache ??= makeFishGeo('#8fb0c8', '#e4eef6', '#5f84a0'))
+}
+export function smokedFishGeo(): THREE.BufferGeometry {
+  return (smokedGeoCache ??= makeFishGeo('#b8763a', '#e0b070', '#7a4a22'))
+}
+
+const coalGeo = new THREE.IcosahedronGeometry(0.17, 0)
+coalGeo.scale(1.2, 0.85, 1)
+export const coalMat = new THREE.MeshStandardMaterial({ color: '#26262c', roughness: 0.55, metalness: 0.25, flatShading: true })
+
 export function makeCarryItem(kind: ResKind): THREE.Mesh {
   switch (kind) {
     case 'log':
@@ -156,11 +194,26 @@ export function makeCarryItem(kind: ResKind): THREE.Mesh {
       return new THREE.Mesh(hideGeo(), vertexColorMat)
     case 'coat':
       return new THREE.Mesh(coatGeo(), vertexColorMat)
+    case 'fish':
+      return new THREE.Mesh(fishGeo(), vertexColorMat)
+    case 'smoked':
+      return new THREE.Mesh(smokedFishGeo(), vertexColorMat)
+    case 'coal':
+      return new THREE.Mesh(coalGeo, coalMat)
   }
 }
 
-export const KIND_ORDER: ResKind[] = ['log', 'raw', 'cooked', 'hide', 'coat']
-export const STACK_STEP: Record<ResKind, number> = { log: 0.24, raw: 0.22, cooked: 0.22, hide: 0.11, coat: 0.16 }
+export const KIND_ORDER: ResKind[] = ['log', 'raw', 'cooked', 'hide', 'coat', 'fish', 'smoked', 'coal']
+export const STACK_STEP: Record<ResKind, number> = {
+  log: 0.24,
+  raw: 0.22,
+  cooked: 0.22,
+  hide: 0.11,
+  coat: 0.16,
+  fish: 0.2,
+  smoked: 0.2,
+  coal: 0.26,
+}
 
 export function kindIndex(k: ResKind) {
   return KIND_ORDER.indexOf(k)
@@ -345,6 +398,81 @@ export function wolfBodyGeo(): THREE.BufferGeometry {
   return wolfGeo
 }
 
+let goatGeo: THREE.BufferGeometry | null = null
+let bearGeo: THREE.BufferGeometry | null = null
+
+/** shaggy white mountain goat with curled dark horns and a beard */
+export function goatBodyGeo(): THREE.BufferGeometry {
+  if (goatGeo) return goatGeo
+  const fur = '#eeeae0'
+  const shade = '#d6d0c2'
+  const horn = '#3a3530'
+  const parts: THREE.BufferGeometry[] = []
+  const body = new THREE.BoxGeometry(0.55, 0.55, 0.95)
+  body.translate(0, 0.72, 0)
+  parts.push(colorGeo(body, fur))
+  const hump = new THREE.BoxGeometry(0.6, 0.35, 0.45)
+  hump.translate(0, 0.98, 0.25)
+  parts.push(colorGeo(hump, shade))
+  const neck = new THREE.BoxGeometry(0.26, 0.36, 0.26)
+  neck.rotateX(-0.35)
+  neck.translate(0, 1.05, 0.5)
+  parts.push(colorGeo(neck, fur))
+  const head = new THREE.BoxGeometry(0.26, 0.3, 0.38)
+  head.translate(0, 1.22, 0.7)
+  parts.push(colorGeo(head, fur))
+  const beard = new THREE.BoxGeometry(0.12, 0.2, 0.1)
+  beard.translate(0, 0.98, 0.84)
+  parts.push(colorGeo(beard, shade))
+  for (const s of [-1, 1]) {
+    const h = new THREE.TorusGeometry(0.12, 0.035, 5, 8, Math.PI * 1.2)
+    h.rotateY(Math.PI / 2)
+    h.translate(s * 0.1, 1.42, 0.6)
+    parts.push(colorGeo(h, horn))
+  }
+  const tail = new THREE.BoxGeometry(0.1, 0.12, 0.08)
+  tail.translate(0, 0.9, -0.5)
+  parts.push(colorGeo(tail, shade))
+  goatGeo = mergeGeometries(parts)!
+  return goatGeo
+}
+
+/** big brown bear: heavy shoulders, round ears, pale muzzle */
+export function bearBodyGeo(): THREE.BufferGeometry {
+  if (bearGeo) return bearGeo
+  const fur = '#5a3f2a'
+  const dark = '#3f2b1c'
+  const muzzle = '#b08a64'
+  const parts: THREE.BufferGeometry[] = []
+  const body = new THREE.SphereGeometry(0.62, 12, 9)
+  body.scale(0.95, 0.85, 1.35)
+  body.translate(0, 0.98, -0.1)
+  parts.push(colorGeo(body, fur))
+  const hump = new THREE.SphereGeometry(0.5, 10, 8)
+  hump.scale(1, 0.8, 0.9)
+  hump.translate(0, 1.32, 0.35)
+  parts.push(colorGeo(hump, dark))
+  const head = new THREE.SphereGeometry(0.36, 10, 8)
+  head.translate(0, 1.22, 0.95)
+  parts.push(colorGeo(head, fur))
+  const snout = new THREE.BoxGeometry(0.26, 0.2, 0.3)
+  snout.translate(0, 1.12, 1.28)
+  parts.push(colorGeo(snout, muzzle))
+  const nose = new THREE.BoxGeometry(0.12, 0.08, 0.06)
+  nose.translate(0, 1.2, 1.44)
+  parts.push(colorGeo(nose, '#1e1a16'))
+  for (const s of [-1, 1]) {
+    const ear = new THREE.SphereGeometry(0.1, 7, 6)
+    ear.translate(s * 0.24, 1.52, 0.9)
+    parts.push(colorGeo(ear, dark))
+    const eye = new THREE.SphereGeometry(0.04, 6, 5)
+    eye.translate(s * 0.13, 1.3, 1.24)
+    parts.push(colorGeo(eye, '#1e1a16'))
+  }
+  bearGeo = mergeGeometries(parts)!
+  return bearGeo
+}
+
 const deerLegGeo = new THREE.CylinderGeometry(0.05, 0.045, 0.5, 6)
 deerLegGeo.translate(0, -0.25, 0)
 const deerLegMat = new THREE.MeshStandardMaterial({ color: '#6e523a', roughness: 0.9 })
@@ -352,6 +480,56 @@ const wolfLegGeo = new THREE.CylinderGeometry(0.055, 0.045, 0.42, 6)
 wolfLegGeo.translate(0, -0.21, 0)
 const wolfLegMat = new THREE.MeshStandardMaterial({ color: '#555b66', roughness: 0.9 })
 const wolfEyeMat = new THREE.MeshBasicMaterial({ color: '#ffd24a' })
+const goatLegGeo = new THREE.CylinderGeometry(0.06, 0.05, 0.48, 6)
+goatLegGeo.translate(0, -0.24, 0)
+const goatLegMat = new THREE.MeshStandardMaterial({ color: '#cfc8b8', roughness: 0.9 })
+const bearLegGeo = new THREE.CylinderGeometry(0.16, 0.14, 0.62, 7)
+bearLegGeo.translate(0, -0.31, 0)
+const bearLegMat = new THREE.MeshStandardMaterial({ color: '#3f2b1c', roughness: 0.95 })
+
+/** body geometry, leg mesh + spots, leg hip height, shadow size per animal */
+const RIG: Record<
+  'deer' | 'rabbit' | 'goat' | 'bear',
+  { body: () => THREE.BufferGeometry; leg?: [THREE.BufferGeometry, THREE.Material]; legs: number[][]; hip: number; shadow: number }
+> = {
+  deer: {
+    body: () => deerBodyGeo(),
+    leg: [deerLegGeo, deerLegMat],
+    legs: [
+      [-0.16, 0.35],
+      [0.16, 0.35],
+      [-0.16, -0.35],
+      [0.16, -0.35],
+    ],
+    hip: 0.5,
+    shadow: 1.3,
+  },
+  rabbit: { body: () => rabbitBodyGeo(), legs: [], hip: 0, shadow: 0.6 },
+  goat: {
+    body: () => goatBodyGeo(),
+    leg: [goatLegGeo, goatLegMat],
+    legs: [
+      [-0.17, 0.32],
+      [0.17, 0.32],
+      [-0.17, -0.32],
+      [0.17, -0.32],
+    ],
+    hip: 0.48,
+    shadow: 1.3,
+  },
+  bear: {
+    body: () => bearBodyGeo(),
+    leg: [bearLegGeo, bearLegMat],
+    legs: [
+      [-0.32, 0.55],
+      [0.32, 0.55],
+      [-0.32, -0.6],
+      [0.32, -0.6],
+    ],
+    hip: 0.62,
+    shadow: 2.2,
+  },
+}
 
 export interface AnimalRig {
   group: THREE.Group
@@ -362,27 +540,23 @@ export interface AnimalRig {
   mouth?: THREE.Mesh
 }
 
-export function makeAnimalRig(kind: 'deer' | 'rabbit'): AnimalRig {
+export function makeAnimalRig(kind: 'deer' | 'rabbit' | 'goat' | 'bear'): AnimalRig {
+  const cfg = RIG[kind]
   const group = new THREE.Group()
   const mat = vertexColorMat.clone() // per-animal so hit flash can tint
-  const body = new THREE.Mesh(kind === 'deer' ? deerBodyGeo() : rabbitBodyGeo(), mat)
+  const body = new THREE.Mesh(cfg.body(), mat)
   body.castShadow = true
   group.add(body)
   const legs: THREE.Mesh[] = []
-  if (kind === 'deer') {
-    for (const [x, z] of [
-      [-0.16, 0.35],
-      [0.16, 0.35],
-      [-0.16, -0.35],
-      [0.16, -0.35],
-    ]) {
-      const leg = new THREE.Mesh(deerLegGeo, deerLegMat)
-      leg.position.set(x, 0.5, z)
+  if (cfg.leg) {
+    for (const [x, z] of cfg.legs) {
+      const leg = new THREE.Mesh(cfg.leg[0], cfg.leg[1])
+      leg.position.set(x, cfg.hip, z)
       group.add(leg)
       legs.push(leg)
     }
   }
-  group.add(makeBlobShadow(kind === 'deer' ? 1.3 : 0.6))
+  group.add(makeBlobShadow(cfg.shadow))
   return { group, body, legs, mat }
 }
 

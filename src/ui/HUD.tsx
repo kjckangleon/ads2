@@ -108,6 +108,43 @@ function Clock() {
   )
 }
 
+function Furnace() {
+  const state = useUI((s) => s.furnace)
+  const bonus = useUI((s) => s.furnaceBonus)
+  const frac = useUI((s) => s.furnaceFrac)
+  if (!state) return null
+  return (
+    <div className={`hud-furnace ${state}`}>
+      <span>{state === 'lit' ? `🔥 Sales +${bonus}%` : '🧊 Furnace cold'}</span>
+      <div className="bar">
+        <div style={{ width: `${frac * 100}%` }} />
+      </div>
+    </div>
+  )
+}
+
+/** The rotating task board: three goals with a reward each. */
+function Tasks() {
+  const tasks = useUI((s) => s.tasks)
+  if (!tasks.length) return null
+  return (
+    <div className="hud-tasks">
+      {tasks.map((t) => (
+        <div key={t.id} className={`hud-task${t.done ? ' done' : ''}`}>
+          <div className="hud-task-row">
+            <span className="hud-task-text">{t.done ? '✅ ' : ''}{t.text}</span>
+            <span className="hud-task-reward">{t.reward}</span>
+          </div>
+          <div className="bar">
+            <div style={{ width: `${t.frac * 100}%` }} />
+          </div>
+          <div className="hud-task-progress">{t.progress}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function HUD() {
   const objective = useUI((s) => s.objectiveText)
   const flash = useUI((s) => s.objectiveFlash)
@@ -153,6 +190,10 @@ export function HUD() {
           )}
         </div>
         <Clock />
+      </div>
+      <div className="hud-br">
+        <Furnace />
+        <Tasks />
       </div>
       <Banner />
     </div>

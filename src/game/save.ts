@@ -1,10 +1,11 @@
-import type { Sim, WorkerRole, StationId, ProcessorId, ZoneId, PileId } from './types'
+import type { Sim, WorkerRole, StationId, ProcessorId, ZoneId, PileId, BeltId, TaskSim } from './types'
 import {
   PAD_BY_ID,
   padCost,
   STATION_IDS,
   PROC_IDS,
   ZONE_IDS,
+  BELT_IDS,
   CLOCK,
   CARAVAN,
   ECONOMY,
@@ -16,6 +17,7 @@ import {
   procOutCap,
   playerSpeed,
   playerCarry,
+  furnaceCap,
 } from './balance'
 import { hireWorker } from './systems/workers'
 import { levelFromTotalXp } from './systems/progress'
@@ -43,7 +45,12 @@ interface SaveV2 {
   caravan: { count: number; nextIn: number }
   rushBest: number
   depot?: number
+  coalDepot?: number
+  furnaceFuel?: number
+  tasks?: TaskSim[]
 }
+
+const PROC_BELT: Record<ProcessorId, BeltId> = { kitchen: 'meat', tailor: 'coat', smokehouse: 'fish' }
 
 export function saveNow(sim: Sim) {
   try {
@@ -61,7 +68,9 @@ export function saveNow(sim: Sim) {
       proc: Object.fromEntries(
         PROC_IDS.map((id) => {
           const pr = sim.proc[id]
-          return [id, { level: pr.level, inCount: pr.inCount, outCount: pr.outCount, unlocked: pr.unlocked }]
+          // items riding a belt go back on the table they came from
+          const outCount = pr.outCount + sim.belts[PROC_BELT[id]].items.length
+          return [id, { level: pr.level, inCount: pr.inCount, outCount, unlocked: pr.unlocked }]
         }),
       ),
       tower: {
@@ -83,7 +92,11 @@ export function saveNow(sim: Sim) {
       game: { ...sim.game },
       caravan: { count: sim.caravan.count, nextIn: sim.caravan.state === 'away' ? sim.caravan.nextIn : 20 },
       rushBest: sim.rush.best,
-      depot: sim.depot.count,
+      depot: sim.depot.count + sim.belts.wood.items.length,
+      coalDepot: sim.coalDepot.count + sim.belts.coal.items.length,
+      furnaceFuel: sim.furnace.fuel,
+      // finished-but-unpaid tasks are kept open so the reward isn't lost
+      tasks: sim.tasks.map((t) => ({ ...t, doneT: -1 })),
     }
     localStorage.setItem(KEY, JSON.stringify(data))
   } catch {
@@ -200,6 +213,17 @@ function apply(sim: Sim, d: SaveV2) {
   sim.caravan.nextIn = Math.min(d.caravan.nextIn, 30)
   sim.rush.best = d.rushBest
   sim.depot.count = Math.min(d.depot ?? 0, sim.depot.cap)
+  sim.coalDepot.count = Math.min(d.coalDepot ?? 0, sim.coalDepot.cap)
+
+  // belts and the furnace are rebuilt from their pads
+  for (const id of BELT_IDS) sim.belts[id].level = d.pads[`belt_${id}`]?.level ?? 0
+  const f = sim.furnace
+  f.built = sim.zones.mine
+  f.level = d.pads.furnace_up?.level ?? 0
+  f.cap = furnaceCap(f.level)
+  f.fuel = Math.min(d.furnaceFuel ?? 0, f.cap)
+
+  sim.tasks = (d.tasks ?? []).map((t) => ({ ...t, id: sim.ids++ }))
 
   for (const role of d.workers) hireWorker(sim, role)
 }

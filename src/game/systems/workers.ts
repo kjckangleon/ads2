@@ -3,14 +3,24 @@
 // travel as visible stacks. Role functions only choose sources and sinks;
 // reservations stop two workers claiming the same drop, tree or coin pile.
 
-import type { Sim, WorkerSim, WorkerRole, ResKind, ProcessorSim, ProcessorId, StationId, V2, DropSim } from '../types'
-import { WORKERS, WORLD, GUARD, TREES, PROC_IDS, workerSpeed, workerCap, guardDamage } from '../balance'
+import type { Sim, WorkerSim, WorkerRole, ResKind, ProcessorSim, ProcessorId, V2, DropSim, TreeSim, DepotSim } from '../types'
+import { WORKERS, WORLD, GUARD, TREES, NODES, PROC_IDS, workerSpeed, workerCap, guardDamage } from '../balance'
 import { RES_NAME } from '../icons'
 import { fmt } from '../format'
 import { seek, dist, lerpAngle, damp } from '../util'
 import { sfx } from '../audio'
 import { damageWolf } from './wolves'
 import { dropItem } from './animals'
+import {
+  type Source,
+  type Sink,
+  procSource,
+  depotSource,
+  stationSink,
+  procInSink,
+  furnaceSink,
+  depotSink,
+} from './sinks'
 
 export function hireWorker(sim: Sim, role: WorkerRole, at?: V2) {
   const guards = sim.workers.filter((w) => w.role === 'guard').length
@@ -56,6 +66,7 @@ function transferTick(w: WorkerSim, dt: number): boolean {
   return false
 }
 
+// ground drops (raw meat, hides) only ever feed the kitchen and the tailor
 function procAccepting(sim: Sim, kind: ResKind): ProcessorSim | null {
   for (const id of PROC_IDS) {
     const pr = sim.proc[id]
@@ -167,6 +178,8 @@ function updateCollector(sim: Sim, w: WorkerSim, dt: number) {
 
 // ---------------- staff: stand at a workshop so it runs ----------------
 
+const STAFF_VERB: Record<ProcessorId, string> = { kitchen: 'cooking', tailor: 'sewing coats', smokehouse: 'smoking fish' }
+
 function updateStaff(sim: Sim, w: WorkerSim, dt: number, procId: ProcessorId) {
   const pr = sim.proc[procId]
   w.mode = 'work'
@@ -175,36 +188,15 @@ function updateStaff(sim: Sim, w: WorkerSim, dt: number, procId: ProcessorId) {
   w.activity = !pr.staffed
     ? 'walking to work'
     : pr.active
-      ? procId === 'kitchen'
-        ? 'cooking'
-        : 'sewing coats'
+      ? STAFF_VERB[procId]
       : pr.inCount === 0
         ? `waiting for ${RES_NAME[pr.inKind]}`
         : 'output full!'
 }
 
-// ---------------- hauler: pickup point -> market stall ----------------
+// ---------------- hauler: pickup point -> stall / furnace ----------------
 
-/** Somewhere a hauler loads from: a workshop's output table or the log pile. */
-interface Source {
-  at: V2
-  kind: ResKind
-  open: boolean
-  count: number
-  take: () => void
-}
-
-function procSource(pr: ProcessorSim): Source {
-  return { at: pr.outZone, kind: pr.outKind, open: pr.unlocked, count: pr.outCount, take: () => pr.outCount-- }
-}
-
-function depotSource(sim: Sim): Source {
-  const d = sim.depot
-  return { at: d.pos, kind: 'log', open: true, count: d.count, take: () => d.count-- }
-}
-
-function updateHauler(sim: Sim, w: WorkerSim, dt: number, src: Source, stationId: StationId) {
-  const st = sim.stations[stationId]
+function updateHauler(sim: Sim, w: WorkerSim, dt: number, src: Source, sink: Sink) {
   const cap = capOf(sim, w.role)
   const what = RES_NAME[src.kind]
 
@@ -213,28 +205,23 @@ function updateHauler(sim: Sim, w: WorkerSim, dt: number, src: Source, stationId
       w.mode = 'fetch'
       return
     }
-    w.activity = 'restocking counter'
-    if (!walk(sim, w, st.restock, dt)) return
-    if (st.stock < st.capacity) {
+    w.activity = sink.label
+    if (!walk(sim, w, sink.at, dt)) return
+    if (sink.count < sink.cap) {
       if (transferTick(w, dt)) {
         const k = w.carry.pop()!
-        st.stock++
+        sink.put()
         sfx.deposit()
-        sim.fx.push({
-          t: 'itemfly',
-          kind: k,
-          from: { x: w.pos.x, y: 1.6, z: w.pos.z },
-          to: { x: st.pos.x, y: 1.2, z: st.pos.z },
-        })
+        sim.fx.push({ t: 'itemfly', kind: k, from: { x: w.pos.x, y: 1.6, z: w.pos.z }, to: sink.to })
         if (w.carry.length === 0) w.mode = 'fetch'
       }
     } else {
-      w.activity = 'counter full!'
+      w.activity = sink.full
     }
     return
   }
 
-  const wanted = st.stock + w.carry.length < st.capacity
+  const wanted = sink.open && sink.count + w.carry.length < sink.cap
   if (src.open && src.count > 0 && wanted && w.carry.length < cap) {
     w.activity = `fetching ${what}`
     if (walk(sim, w, src.at, dt, 0.6) && transferTick(w, dt)) {
@@ -249,7 +236,7 @@ function updateHauler(sim: Sim, w: WorkerSim, dt: number, src: Source, stationId
     w.mode = 'deliver'
     return
   }
-  w.activity = wanted ? `waiting for ${what}` : 'counter is full'
+  w.activity = wanted ? `waiting for ${what}` : sink.full
   walk(sim, w, { x: src.at.x + 1.2, z: src.at.z + 1.5 }, dt, 0.8)
 }
 
@@ -310,83 +297,90 @@ function updateCashier(sim: Sim, w: WorkerSim, dt: number) {
   walk(sim, w, { x: WORLD.campfire.x + 2, z: WORLD.campfire.z + 2 }, dt, 0.8)
 }
 
-// ---------------- lumberjack: trees -> wood stall ----------------
+// ---------------- gatherers: trees / fishing holes / coal seams ----------------
 
-function releaseTree(sim: Sim, w: WorkerSim) {
-  for (const t of sim.trees) if (t.reservedBy === w.id) t.reservedBy = null
+interface GatherCfg {
+  nodes: TreeSim[]
+  kind: ResKind
+  workTime: number
+  /** with a carrier hired, gatherers only stack their haul on this pile */
+  depot: DepotSim | null
+  carrier: WorkerRole | null
+  /** where the haul goes when nobody carries it on */
+  direct: Sink
+  idle: V2
+  verb: string
+  idleText: string
 }
 
-function updateLumberjack(sim: Sim, w: WorkerSim, dt: number) {
-  const st = sim.stations.wood
-  const d = sim.depot
-  const cap = capOf(sim, 'lumberjack')
-  // with carriers on the job, lumberjacks only stack logs at the forest edge
-  const toPile = sim.workers.some((x) => x.role === 'logCarrier')
-  const dest = toPile ? d.pos : st.restock
+function releaseNodes(nodes: TreeSim[], w: WorkerSim) {
+  for (const t of nodes) if (t.reservedBy === w.id) t.reservedBy = null
+}
+
+function updateGatherer(sim: Sim, w: WorkerSim, dt: number, cfg: GatherCfg) {
+  const cap = capOf(sim, w.role)
+  const toPile = !!cfg.depot && !!cfg.carrier && sim.workers.some((x) => x.role === cfg.carrier)
+  const sink = toPile ? depotSink(cfg.depot!, `stacking ${RES_NAME[cfg.kind]}`) : cfg.direct
 
   if (w.mode === 'deliver') {
     if (w.carry.length === 0) {
       w.mode = 'fetch'
       return
     }
-    w.activity = toPile ? 'stacking logs' : 'hauling logs'
-    if (!walk(sim, w, dest, dt, 0.6)) return
-    const room = toPile ? d.count < d.cap : st.stock < st.capacity
-    if (room) {
+    w.activity = sink.label
+    if (!walk(sim, w, sink.at, dt, 0.6)) return
+    if (sink.count < sink.cap) {
       if (transferTick(w, dt)) {
-        w.carry.pop()
-        if (toPile) d.count++
-        else st.stock++
+        const k = w.carry.pop()!
+        sink.put()
         sfx.deposit()
-        sim.fx.push({
-          t: 'itemfly',
-          kind: 'log',
-          from: { x: w.pos.x, y: 1.6, z: w.pos.z },
-          to: toPile ? { x: d.pos.x, y: 0.6, z: d.pos.z } : { x: st.pos.x, y: 1.2, z: st.pos.z },
-        })
+        sim.fx.push({ t: 'itemfly', kind: k, from: { x: w.pos.x, y: 1.6, z: w.pos.z }, to: sink.to })
         if (w.carry.length === 0) w.mode = 'fetch'
       }
     } else {
-      w.activity = toPile ? 'log pile full!' : 'stall full!'
+      w.activity = sink.full
     }
     return
   }
 
   if (w.carry.length >= cap) {
-    releaseTree(sim, w)
+    releaseNodes(cfg.nodes, w)
     w.mode = 'deliver'
     return
   }
 
-  let tree = sim.trees.find((t) => t.reservedBy === w.id && t.wood > 0)
-  if (!tree) {
-    releaseTree(sim, w)
+  let node = cfg.nodes.find((t) => t.reservedBy === w.id && t.wood > 0)
+  if (!node) {
+    releaseNodes(cfg.nodes, w)
     let bestD = Infinity
-    for (const t of sim.trees) {
+    for (const t of cfg.nodes) {
       if (t.wood <= 0 || t.reservedBy !== null) continue
       const d = dist(w.pos, t.pos)
       if (d < bestD) {
         bestD = d
-        tree = t
+        node = t
       }
     }
-    if (tree) tree.reservedBy = w.id
+    if (node) node.reservedBy = w.id
   }
 
-  if (tree) {
-    w.activity = 'chopping'
-    if (walk(sim, w, { x: tree.pos.x + 0.9, z: tree.pos.z + 0.4 }, dt, 0.5)) {
+  if (node) {
+    w.activity = cfg.verb
+    if (walk(sim, w, { x: node.pos.x + 0.9, z: node.pos.z + 0.4 }, dt, 0.5)) {
+      w.yaw = lerpAngle(w.yaw, Math.atan2(node.pos.x - w.pos.x, node.pos.z - w.pos.z), damp(10, dt))
       w.timer -= dt
       if (w.timer <= 0) {
-        w.timer = WORKERS.lumberjackChopTime
+        w.timer = cfg.workTime
         w.swing = 0.25
-        tree.wood--
-        tree.shake = 1
-        w.carry.push('log')
-        sfx.chop()
-        if (tree.wood <= 0) {
-          tree.regrowT = TREES.regrowTime
-          tree.reservedBy = null
+        node.wood--
+        node.shake = 1
+        w.carry.push(cfg.kind)
+        if (cfg.kind === 'log') sfx.chop()
+        else if (cfg.kind === 'coal') sfx.thud()
+        else sfx.pick()
+        if (node.wood <= 0) {
+          node.regrowT = regrowTime(cfg.kind)
+          node.reservedBy = null
         }
       }
     }
@@ -397,9 +391,52 @@ function updateLumberjack(sim: Sim, w: WorkerSim, dt: number) {
     w.mode = 'deliver'
     return
   }
-  w.activity = 'waiting for trees'
-  walk(sim, w, { x: WORLD.treeArea.x + 6, z: WORLD.treeArea.z + 5 }, dt, 1)
+  w.activity = cfg.idleText
+  walk(sim, w, cfg.idle, dt, 1)
 }
+
+function regrowTime(kind: ResKind) {
+  return kind === 'fish' ? NODES.hole.regrowTime : kind === 'coal' ? NODES.seam.regrowTime : TREES.regrowTime
+}
+
+const lumberjack = (sim: Sim, w: WorkerSim, dt: number) =>
+  updateGatherer(sim, w, dt, {
+    nodes: sim.trees,
+    kind: 'log',
+    workTime: WORKERS.lumberjackChopTime,
+    depot: sim.depot,
+    carrier: 'logCarrier',
+    direct: stationSink(sim, 'wood'),
+    idle: { x: WORLD.treeArea.x + 6, z: WORLD.treeArea.z + 5 },
+    verb: 'chopping',
+    idleText: 'waiting for trees',
+  })
+
+const fisher = (sim: Sim, w: WorkerSim, dt: number) =>
+  updateGatherer(sim, w, dt, {
+    nodes: sim.holes,
+    kind: 'fish',
+    workTime: WORKERS.fisherTime,
+    depot: null,
+    carrier: null,
+    direct: procInSink(sim.proc.smokehouse),
+    idle: { x: WORLD.pond.x + WORLD.pond.rx + 1, z: WORLD.pond.z + 1 },
+    verb: 'fishing',
+    idleText: 'waiting for a bite',
+  })
+
+const miner = (sim: Sim, w: WorkerSim, dt: number) =>
+  updateGatherer(sim, w, dt, {
+    nodes: sim.seams,
+    kind: 'coal',
+    workTime: WORKERS.minerTime,
+    depot: sim.coalDepot,
+    carrier: 'coalCarrier',
+    direct: furnaceSink(sim),
+    idle: { x: WORLD.coalDepot.x - 2, z: WORLD.coalDepot.z - 1.5 },
+    verb: 'mining coal',
+    idleText: 'waiting for the seams',
+  })
 
 // ---------------- guard: chase and fight wolves near the post ----------------
 
@@ -449,11 +486,16 @@ const updaters: Record<WorkerRole, (sim: Sim, w: WorkerSim, dt: number) => void>
   collector: updateCollector,
   cook: (s, w, dt) => updateStaff(s, w, dt, 'kitchen'),
   tailor: (s, w, dt) => updateStaff(s, w, dt, 'tailor'),
-  runner: (s, w, dt) => updateHauler(s, w, dt, procSource(s.proc.kitchen), 'meat'),
-  coatRunner: (s, w, dt) => updateHauler(s, w, dt, procSource(s.proc.tailor), 'coat'),
-  logCarrier: (s, w, dt) => updateHauler(s, w, dt, depotSource(s), 'wood'),
+  smoker: (s, w, dt) => updateStaff(s, w, dt, 'smokehouse'),
+  runner: (s, w, dt) => updateHauler(s, w, dt, procSource(s.proc.kitchen), stationSink(s, 'meat')),
+  coatRunner: (s, w, dt) => updateHauler(s, w, dt, procSource(s.proc.tailor), stationSink(s, 'coat')),
+  fishRunner: (s, w, dt) => updateHauler(s, w, dt, procSource(s.proc.smokehouse), stationSink(s, 'fish')),
+  logCarrier: (s, w, dt) => updateHauler(s, w, dt, depotSource(s.depot), stationSink(s, 'wood')),
+  coalCarrier: (s, w, dt) => updateHauler(s, w, dt, depotSource(s.coalDepot), furnaceSink(s)),
   cashier: updateCashier,
-  lumberjack: updateLumberjack,
+  lumberjack,
+  fisher,
+  miner,
   guard: updateGuard,
 }
 

@@ -9,14 +9,18 @@ import { sim } from '../game/state'
 import type { ProcessorId } from '../game/types'
 import { TextLabel, makeEmojiSprite, vertexColorMat } from './rutil'
 import { FireEffect } from './Environment'
-import { hideGeo, coatGeo, rawMeatMat, cookedMeatMat, makeBar, setBar } from './characters'
+import { hideGeo, coatGeo, fishGeo, smokedFishGeo, rawMeatMat, cookedMeatMat, makeBar, setBar } from './characters'
 import { ItemGrid, gridLayout } from './ItemGrid'
 import { PopIn } from './anim'
+import { capText } from '../game/balance'
 
 const STYLE: Record<ProcessorId, { sign: string; inIcon: string; outIcon: string; workIcon: string; ring: string; bar: string }> = {
   kitchen: { sign: '🍳', inIcon: '🥩', outIcon: '🍗', workIcon: '👨‍🍳', ring: '#ffb060', bar: '#ffab4a' },
   tailor: { sign: '🧵', inIcon: '🐾', outIcon: '🧥', workIcon: '🧵', ring: '#c9a0ff', bar: '#c9a0ff' },
+  smokehouse: { sign: '🔥', inIcon: '🐟', outIcon: '🍣', workIcon: '🔥', ring: '#ffb060', bar: '#e0a860' },
 }
+
+const STAFF_ROLE: Record<ProcessorId, string> = { kitchen: 'cook', tailor: 'tailor', smokehouse: 'smoker' }
 
 const tableMat = new THREE.MeshStandardMaterial({ color: '#7a5a38', roughness: 0.9 })
 const postMat = new THREE.MeshStandardMaterial({ color: '#5e4630', roughness: 0.9 })
@@ -30,6 +34,9 @@ meatGeo.scale(1.3, 0.72, 1)
 /** exact table piles: meat in 3×3 layers, hides / coats in 2×2 layers */
 function tableGrid(id: ProcessorId, output: boolean): ItemGrid {
   if (id === 'kitchen') return new ItemGrid(meatGeo, output ? cookedMeatMat : rawMeatMat, 45, gridLayout(3, 3, 0.36, 0.34, 0.17))
+  if (id === 'smokehouse') {
+    return new ItemGrid(output ? smokedFishGeo() : fishGeo(), vertexColorMat, 45, gridLayout(1, 3, 0.5, 0.34, 0.15))
+  }
   return output
     ? new ItemGrid(coatGeo(), vertexColorMat, 40, gridLayout(2, 2, 0.56, 0.42, 0.15))
     : new ItemGrid(hideGeo(), vertexColorMat, 48, gridLayout(2, 2, 0.6, 0.46, 0.08))
@@ -99,6 +106,59 @@ function buildTailorCenter(root: THREE.Group) {
   return { item, needle }
 }
 
+const plankMat = new THREE.MeshStandardMaterial({ color: '#6e5238', roughness: 0.95 })
+const roofMat = new THREE.MeshStandardMaterial({ color: '#4a3a2c', roughness: 0.9 })
+const snowMat = new THREE.MeshStandardMaterial({ color: '#eef3f9', roughness: 0.85 })
+const emberMat = new THREE.MeshBasicMaterial({ color: '#ff8a2a' })
+
+/** little plank smoke hut with a chimney, racks of hanging fish and a glowing ember pit */
+function buildSmokehouseCenter(root: THREE.Group) {
+  const hut = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.5, 1.2), plankMat)
+  hut.position.set(0, 0.75, -0.5)
+  hut.castShadow = true
+  root.add(hut)
+  for (const s of [-1, 1]) {
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 1.45), roofMat)
+    roof.position.set(s * 0.42, 1.7, -0.5)
+    roof.rotation.z = -s * 0.55
+    root.add(roof)
+    const snow = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 1.45), snowMat)
+    snow.position.set(s * 0.43, 1.76, -0.5)
+    snow.rotation.z = -s * 0.55
+    root.add(snow)
+  }
+  const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 0.3), stoneMat)
+  chimney.position.set(0.5, 2.0, -0.7)
+  root.add(chimney)
+  // open front rack with fish hanging over the ember pit
+  for (const s of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.3, 6), postMat)
+    post.position.set(s * 0.7, 0.65, 0.35)
+    root.add(post)
+  }
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.5, 6), postMat)
+  bar.rotation.z = Math.PI / 2
+  bar.position.set(0, 1.25, 0.35)
+  root.add(bar)
+  for (const x of [-0.45, 0, 0.45]) {
+    const f = new THREE.Mesh(smokedFishGeo(), vertexColorMat)
+    f.rotation.z = Math.PI / 2
+    f.position.set(x, 0.95, 0.35)
+    root.add(f)
+  }
+  const pit = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.12, 10), stoneMat)
+  pit.position.set(0, 0.06, 0.35)
+  root.add(pit)
+  const embers = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.05, 10), emberMat)
+  embers.position.set(0, 0.14, 0.35)
+  root.add(embers)
+  const item = new THREE.Mesh(fishGeo(), vertexColorMat)
+  item.rotation.z = Math.PI / 2
+  item.position.set(0, 0.62, 0.35)
+  root.add(item)
+  return { item, needle: null as THREE.Mesh | null }
+}
+
 function ProcessorView({ id }: { id: ProcessorId }) {
   const activeRef = useRef(false)
   const built = useMemo(() => {
@@ -106,10 +166,11 @@ function ProcessorView({ id }: { id: ProcessorId }) {
     const style = STYLE[id]
     const root = new THREE.Group()
     root.position.set(pr.pos.x, 0, pr.pos.z)
-    const center = id === 'kitchen' ? buildKitchenCenter(root) : buildTailorCenter(root)
+    const center =
+      id === 'kitchen' ? buildKitchenCenter(root) : id === 'tailor' ? buildTailorCenter(root) : buildSmokehouseCenter(root)
 
     const signPost = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 2.4, 7), postMat)
-    signPost.position.set(id === 'kitchen' ? 0 : 1.15, 1.2, -1.4)
+    signPost.position.set(id === 'tailor' ? 1.15 : id === 'smokehouse' ? -1.15 : 0, 1.2, -1.4)
     root.add(signPost)
     const sign = makeEmojiSprite(style.sign, 1.0)
     sign.position.set(signPost.position.x, 2.75, -1.4)
@@ -183,6 +244,10 @@ function ProcessorView({ id }: { id: ProcessorId }) {
         item.rotation.y += dt * 2.5
         item.position.y = 0.86 + Math.sin(sim.time * 14) * 0.02
       }
+    } else if (id === 'smokehouse') {
+      item.visible = pr.active
+      item.geometry = p > 0.5 ? smokedFishGeo() : fishGeo()
+      if (pr.active) item.position.y = 0.62 + Math.sin(sim.time * 3) * 0.03
     } else {
       item.visible = pr.active || pr.inCount > 0
       item.geometry = p > 0.55 ? coatGeo() : hideGeo()
@@ -196,10 +261,10 @@ function ProcessorView({ id }: { id: ProcessorId }) {
 
     built.inGrid.update(pr.inCount, sim.time)
     built.outGrid.update(pr.outCount, sim.time)
-    built.inLabel.set(`${pr.inCount}/${pr.inCap}`, pr.inCount >= pr.inCap ? '#ff9a8a' : '#ffd9d0')
-    built.outLabel.set(`${pr.outCount}/${pr.outCap}`, pr.outCount >= pr.outCap ? '#ff9a8a' : '#ffe2b8')
+    built.inLabel.set(capText(pr.inCount, pr.inCap), pr.inCount >= pr.inCap ? '#ff9a8a' : '#ffd9d0')
+    built.outLabel.set(capText(pr.outCount, pr.outCap), pr.outCount >= pr.outCap ? '#ff9a8a' : '#ffe2b8')
     // hide the "stand here" marker once the workshop is staffed
-    const staffHired = sim.workers.some((w) => w.role === (id === 'kitchen' ? 'cook' : 'tailor'))
+    const staffHired = sim.workers.some((w) => w.role === STAFF_ROLE[id])
     built.workRing.visible = !staffHired
     built.workIcon.visible = !staffHired
   })
@@ -233,6 +298,7 @@ export function ProcessorsView() {
     <group>
       <ProcessorView id="kitchen" />
       <ProcessorView id="tailor" />
+      <ProcessorView id="smokehouse" />
     </group>
   )
 }

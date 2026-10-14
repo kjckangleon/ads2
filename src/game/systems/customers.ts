@@ -1,5 +1,5 @@
 import type { Sim, CustomerSim, StationSim, StationId } from '../types'
-import { CUSTOMERS, WORLD, RUSH, REP, STATION_IDS, maxCustomers } from '../balance'
+import { CUSTOMERS, WORLD, RUSH, REP, STATION_IDS, maxCustomers, maxDemand, furnaceBonus } from '../balance'
 import { seek, dist } from '../util'
 import { sfx } from '../audio'
 import { addXp, rushMult } from './progress'
@@ -95,6 +95,10 @@ function trySpawnCustomer(sim: Sim) {
   const st = sim.stations[id]
   const slot = backSlot(st)
   const vip = sim.rep.level >= CUSTOMERS.vipMinLevel && Math.random() < CUSTOMERS.vipChance
+  // higher levels: each survivor buys a bundle (VIPs always the biggest one)
+  const most = maxDemand(sim.rep.level)
+  const least = Math.ceil(most / 2)
+  const want = vip ? most : least + Math.floor(Math.random() * (most - least + 1))
   const c: CustomerSim = {
     id: sim.ids++,
     pos: {
@@ -107,6 +111,8 @@ function trySpawnCustomer(sim: Sim) {
     slot,
     laneOff: (Math.random() - 0.5) * 1.4,
     serveT: 0,
+    want,
+    got: 0,
     starveT: 0,
     carrying: null,
     speed: CUSTOMERS.speed * (0.9 + Math.random() * 0.25),
@@ -120,22 +126,34 @@ function trySpawnCustomer(sim: Sim) {
   sim.customers.push(c)
 }
 
-function serve(sim: Sim, c: CustomerSim, st: StationSim) {
+/** Hand over one item; the sale completes once the whole bundle is handed over. */
+function handOver(sim: Sim, c: CustomerSim, st: StationSim) {
   st.stock--
+  c.got++
   c.carrying = st.accepts
   sim.fx.push({
     t: 'itemfly',
     kind: st.accepts,
     from: { x: st.pos.x, y: 1.1, z: st.pos.z },
-    to: { x: c.pos.x, y: 1.8, z: c.pos.z },
+    to: { x: c.pos.x, y: 1.8 + c.got * 0.15, z: c.pos.z },
   })
+  if (c.got < c.want) {
+    sfx.unstack(c.got)
+    return
+  }
+  serve(sim, c, st)
+}
+
+function serve(sim: Sim, c: CustomerSim, st: StationSim) {
   c.state = 'leaving'
   st.slots[0] = null
 
   // Fast service tips and grows the rush; a long wait at an empty stall breaks it.
   const tipped = c.starveT < RUSH.tipStarve
   const angry = c.starveT > CUSTOMERS.angryAfter
-  const base = st.price * (c.vip ? CUSTOMERS.vipMult : 1)
+  // a lit furnace warms the whole market: every sale pays more
+  const heat = sim.furnace.burning ? 1 + furnaceBonus(sim.furnace.level) : 1
+  const base = Math.round(st.price * c.want * (c.vip ? CUSTOMERS.vipMult : 1) * heat)
   let pay = base
   if (tipped) {
     const r = sim.rush
@@ -160,17 +178,21 @@ function serve(sim: Sim, c: CustomerSim, st: StationSim) {
   sim.stats.served++
   if (st.id === 'wood') sim.stats.woodServed++
   else if (st.id === 'meat') sim.stats.meatServed++
-  else sim.stats.coatServed++
+  else if (st.id === 'coat') sim.stats.coatServed++
+  else sim.stats.fishServed++
   if (c.vip) sim.stats.vips++
   sim.stats.earned += pay
-  addXp(sim, REP.xpServe + (tipped ? REP.xpTip : 0) + (c.vip ? REP.xpVip : 0))
+  addXp(
+    sim,
+    REP.xpServe + CUSTOMERS.xpPerExtraItem * (c.want - 1) + (tipped ? REP.xpTip : 0) + (c.vip ? REP.xpVip : 0),
+  )
 
   sim.fx.push({
     t: 'text',
     x: pile.pos.x,
     y: 1.4,
     z: pile.pos.z,
-    str: c.vip ? `👑 +$${pay}` : `+$${pay}`,
+    str: (c.vip ? `👑 +$${pay}` : `+$${pay}`) + (heat > 1 ? ' 🔥' : ''),
     color: c.vip ? '#ffe680' : tipped ? '#ffd75e' : angry ? '#ff9a8a' : '#efe2bc',
     size: c.vip ? 1.25 : tipped ? 1 : 0.85,
   })
@@ -233,7 +255,10 @@ export function updateCustomers(sim: Sim, dt: number) {
 
       if (c.slot === 0 && arrived && st.stock > 0) {
         c.serveT += dt
-        if (c.serveT >= st.serviceTime) serve(sim, c, st)
+        if (c.serveT >= st.serviceTime) {
+          c.serveT = 0
+          handOver(sim, c, st)
+        }
       }
       continue
     }

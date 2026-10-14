@@ -2,8 +2,9 @@
 // guide arrows that point the player at the current goal, raiding wolves and
 // waiting caravans.
 
-import type { Sim, V2, ProcessorId, StationId, WorkerRole } from '../types'
-import { WORLD, REP, CARAVAN } from '../balance'
+import type { Sim, V2, ProcessorId, StationId, WorkerRole, TreeSim, PadSim } from '../types'
+import { fmt } from '../format'
+import { WORLD, REP, CARAVAN, BELT_IDS } from '../balance'
 import { dist } from '../util'
 import { sfx } from '../audio'
 import { orderText } from './caravan'
@@ -47,6 +48,52 @@ function chainTarget(s: Sim, procId: ProcessorId, stationId: StationId, runner: 
   if (pr.outCount > 0 && !hasWorker(s, runner)) return pr.outZone
   if (pr.inCount > 0 && !pr.staffed) return pr.workSpot
   return nearestDrop(s, pr.inKind as 'raw' | 'hide') ?? { x: WORLD.meadow.x, z: WORLD.meadow.z }
+}
+
+function nearestNode(s: Sim, nodes: TreeSim[]): V2 | null {
+  let best: V2 | null = null
+  let bestD = Infinity
+  for (const n of nodes) {
+    if (n.wood <= 0) continue
+    const d = dist(s.player.pos, n.pos)
+    if (d < bestD) {
+      bestD = d
+      best = n.pos
+    }
+  }
+  return best
+}
+
+/** ice holes -> smokehouse -> fish stall, step by step */
+function fishTarget(s: Sim): V2 | null {
+  const pr = s.proc.smokehouse
+  const carry = s.player.carry
+  if (carry.includes('smoked')) return s.stations.fish.restock
+  if (carry.includes('fish')) return pr.inZone
+  if (pr.outCount > 0) return pr.outZone
+  if (pr.inCount > 0 && !pr.staffed) return pr.workSpot
+  return nearestNode(s, s.holes)
+}
+
+/** coal seams -> furnace */
+function coalTarget(s: Sim): V2 | null {
+  if (s.player.carry.includes('coal')) return s.furnace.feed
+  if (s.coalDepot.count > 0) return s.coalDepot.pos
+  return nearestNode(s, s.seams)
+}
+
+/** the cheapest belt pad that can be bought right now */
+function beltPad(s: Sim): V2 | null {
+  let best: V2 | null = null
+  let cost = Infinity
+  for (const id of BELT_IDS) {
+    const p = s.pads.find((x) => x.id === `belt_${id}`)
+    if (p && p.visible && !p.locked && p.level === 0 && p.cost < cost) {
+      cost = p.cost
+      best = p.pos
+    }
+  }
+  return best
 }
 
 export const OBJECTIVES: Objective[] = [
@@ -131,10 +178,74 @@ export const OBJECTIVES: Objective[] = [
   { text: '🧵 Hire a Tailor', done: (s) => hasWorker(s, 'tailor'), target: padPos('tailor') },
   { text: '🧥 Hire a Coat Runner', done: (s) => hasWorker(s, 'coatRunner'), target: padPos('coatRunner') },
   {
-    text: (s) => `⭐ Grow the settlement — reach Level ${s.rep.level + 1}`,
+    text: (s) =>
+      s.rep.level < REP.beltLevel
+        ? `⭐ Reach Level ${REP.beltLevel} to build conveyor belts`
+        : '⚙️ Build a conveyor belt — it hauls on its own',
+    done: (s) => BELT_IDS.some((id) => s.belts[id].level > 0),
+    target: beltPad,
+  },
+  {
+    text: (s) =>
+      s.rep.level < REP.fisheryLevel
+        ? `⭐ Reach Level ${REP.fisheryLevel} to open the Ice Fishery`
+        : '🎣 Open the Ice Fishery (northwest)',
+    done: (s) => s.zones.fishery,
+    target: padPos('zone_fishery'),
+  },
+  {
+    text: '🎣 Fish the ice holes, smoke the catch, stock the Fish stall',
+    done: (s) => s.stats.fishServed >= 2,
+    target: fishTarget,
+  },
+  { text: '🔥 Hire a Smoker', done: (s) => hasWorker(s, 'smoker'), target: padPos('smoker') },
+  { text: '🎣 Hire a Fisher', done: (s) => hasWorker(s, 'fisher'), target: padPos('fisher') },
+  { text: '🐟 Hire a Fish Runner', done: (s) => hasWorker(s, 'fishRunner'), target: padPos('fishRunner') },
+  {
+    text: (s) =>
+      s.rep.level < REP.mineLevel
+        ? `⭐ Reach Level ${REP.mineLevel} to open the Coal Mine`
+        : '⛏️ Open the Coal Mine (north)',
+    done: (s) => s.zones.mine,
+    target: padPos('zone_mine'),
+  },
+  {
+    text: '⛏️ Mine coal and feed the Furnace — it boosts every sale',
+    done: (s) => s.stats.coalBurned >= 5,
+    target: coalTarget,
+  },
+  { text: '⛏️ Hire a Miner', done: (s) => hasWorker(s, 'miner'), target: padPos('miner') },
+  { text: '🪨 Hire a Coal Carrier', done: (s) => hasWorker(s, 'coalCarrier'), target: padPos('coalCarrier') },
+  {
+    // the open-ended tail: always point at the next thing worth buying
+    text: (s) => {
+      const pad = nextPad(s)
+      if (!pad) return `⭐ Grow the settlement — reach Level ${s.rep.level + 1}`
+      const left = Math.ceil(pad.cost - pad.paid)
+      return s.money >= left ? `⬆️ Next: ${pad.label} — $${fmt(left)}` : `💵 Save $${fmt(left - s.money)} for ${pad.label}`
+    },
     done: () => false,
+    target: (s) => nextPad(s)?.pos ?? null,
   },
 ]
+
+/** the cheapest pad on sale right now, preferring ones the player can already afford */
+function nextPad(s: Sim): PadSim | null {
+  let best: PadSim | null = null
+  let bestCost = Infinity
+  let bestAfford = false
+  for (const p of s.pads) {
+    if (!p.visible || p.locked || p.done) continue
+    const left = p.cost - p.paid
+    const afford = s.money >= left
+    if ((afford && !bestAfford) || (afford === bestAfford && left < bestCost)) {
+      best = p
+      bestCost = left
+      bestAfford = afford
+    }
+  }
+  return best
+}
 
 function current(sim: Sim): Objective {
   return OBJECTIVES[Math.min(sim.objective, OBJECTIVES.length - 1)]

@@ -1,5 +1,5 @@
-import type { Sim, AnimalSim, V2 } from '../types'
-import { ANIMALS, WORLD, deerTarget, animalRespawn } from '../balance'
+import type { Sim, AnimalSim, AnimalKind, V2, TreeSim } from '../types'
+import { ANIMALS, WORLD, deerTarget, bigGameTarget, animalRespawn } from '../balance'
 import { seek, dist, clamp } from '../util'
 import { spawnAnimal } from '../state'
 import { sfx } from '../audio'
@@ -23,23 +23,107 @@ export function countDrops(sim: Sim, kind: 'raw' | 'hide') {
   return n
 }
 
+const LOOT: Record<AnimalKind, { meat: number; hides: number; spread: number }> = {
+  rabbit: { meat: ANIMALS.rabbitDrops, hides: 0, spread: 1.2 },
+  deer: { meat: ANIMALS.deerDrops, hides: 1, spread: 1.2 },
+  goat: { meat: ANIMALS.goat.drops, hides: ANIMALS.goat.hides, spread: 1.4 },
+  bear: { meat: ANIMALS.bear.drops, hides: ANIMALS.bear.hides, spread: 2.0 },
+}
+
 export function killAnimal(sim: Sim, a: AnimalSim) {
   const idx = sim.animals.indexOf(a)
   if (idx === -1) return
   sim.animals.splice(idx, 1)
-  const n = a.kind === 'deer' ? ANIMALS.deerDrops : ANIMALS.rabbitDrops
-  for (let i = 0; i < n; i++) dropItem(sim, 'raw', a.pos, 1.2)
-  if (
-    a.kind === 'deer' &&
-    sim.proc.tailor.unlocked &&
-    countDrops(sim, 'hide') < ANIMALS.maxGroundHides
-  ) {
-    dropItem(sim, 'hide', a.pos, 1.0)
+  const loot = LOOT[a.kind]
+  for (let i = 0; i < loot.meat; i++) dropItem(sim, 'raw', a.pos, loot.spread)
+  if (sim.proc.tailor.unlocked) {
+    for (let i = 0; i < loot.hides && countDrops(sim, 'hide') < ANIMALS.maxGroundHides; i++) {
+      dropItem(sim, 'hide', a.pos, 1.0)
+    }
   }
   sim.stats.kills++
+  if (a.kind === 'bear') sim.stats.bearKills++
   sfx.kill()
-  sim.fx.push({ t: 'burst', x: a.pos.x, y: 0.8, z: a.pos.z, color: '#e06a5a', n: 10, spread: 0.9 })
-  sim.fx.push({ t: 'text', x: a.pos.x, y: 1.6, z: a.pos.z, str: '🥩', size: 1.1 })
+  const big = a.kind === 'bear' || a.kind === 'goat'
+  sim.fx.push({ t: 'burst', x: a.pos.x, y: 0.8, z: a.pos.z, color: '#e06a5a', n: big ? 22 : 10, spread: big ? 1.6 : 0.9 })
+  sim.fx.push({
+    t: 'text',
+    x: a.pos.x,
+    y: big ? 2.4 : 1.6,
+    z: a.pos.z,
+    str: a.kind === 'bear' ? `🐻 🥩×${loot.meat}` : a.kind === 'goat' ? `🐐 🥩×${loot.meat}` : '🥩',
+    color: '#ffd9a0',
+    size: big ? 1.3 : 1.1,
+  })
+  if (a.kind === 'bear') sim.fx.push({ t: 'shake', power: 0.3 })
+}
+
+/**
+ * One hit from the player or the tower. Prey bolts; a bear turns and charges
+ * the player instead, so big game is a fight rather than a free meal.
+ */
+export function hurtAnimal(sim: Sim, a: AnimalSim, dmg: number, byTower: boolean) {
+  a.hp -= dmg
+  a.hitFlash = 1
+  if (a.kind === 'bear') {
+    if (dist(a.pos, sim.player.pos) < ANIMALS.bearAggro) {
+      if (a.state !== 'charge') {
+        sim.fx.push({ t: 'text', x: a.pos.x, y: 2.6, z: a.pos.z, str: '🐻 GRRR!', color: '#ff9a6a', size: 1 })
+      }
+      a.state = 'charge'
+      a.t = ANIMALS.bearChaseTime
+    }
+  } else {
+    a.state = 'flee'
+    a.t = ANIMALS.fleeTime * (byTower ? 0.7 : 1)
+  }
+  const y = a.kind === 'bear' ? 2.3 : 1.6
+  if (byTower) {
+    sfx.hit()
+    sim.fx.push({ t: 'text', x: a.pos.x, y, z: a.pos.z, str: `-${dmg}`, color: '#ffcf5e', size: 0.75 })
+    sim.fx.push({ t: 'burst', x: a.pos.x, y: 0.7, z: a.pos.z, color: '#ffe0a0', n: 5, spread: 0.5 })
+  } else {
+    sim.fx.push({ t: 'text', x: a.pos.x, y, z: a.pos.z, str: `-${dmg}`, color: '#ff7b6b', size: 0.8 })
+  }
+  if (a.hp <= 0) killAnimal(sim, a)
+}
+
+const WALK: Record<AnimalKind, number> = {
+  deer: ANIMALS.deerWalk,
+  rabbit: ANIMALS.rabbitWalk,
+  goat: ANIMALS.goat.walk,
+  bear: ANIMALS.bear.walk,
+}
+const FLEE: Record<AnimalKind, number> = {
+  deer: ANIMALS.deerFlee,
+  rabbit: ANIMALS.rabbitFlee,
+  goat: ANIMALS.goat.flee,
+  bear: ANIMALS.bear.walk,
+}
+
+function regrow(nodes: TreeSim[], dt: number) {
+  for (const t of nodes) {
+    if (t.shake > 0) t.shake -= dt * 3
+    if (t.wood <= 0) {
+      t.regrowT -= dt
+      if (t.regrowT <= 0) t.wood = t.maxWood
+    }
+  }
+}
+
+/** A charging bear that reaches the player bats them away. */
+function bearSwipe(sim: Sim, a: AnimalSim) {
+  const p = sim.player
+  a.atkT = ANIMALS.bearSwipeCd
+  const dx = p.pos.x - a.pos.x
+  const dz = p.pos.z - a.pos.z
+  const d = Math.hypot(dx, dz) || 1
+  p.pos.x += (dx / d) * ANIMALS.bearKnockback
+  p.pos.z += (dz / d) * ANIMALS.bearKnockback
+  sim.fx.push({ t: 'shake', power: 0.45 })
+  sim.fx.push({ t: 'burst', x: p.pos.x, y: 1.0, z: p.pos.z, color: '#f4f8ff', n: 12, spread: 0.9, up: 2 })
+  sim.fx.push({ t: 'text', x: p.pos.x, y: 2.6, z: p.pos.z, str: '💥 SWIPE!', color: '#ff9a6a', size: 1 })
+  sfx.thud()
 }
 
 function pickWanderTarget(a: AnimalSim) {
@@ -55,18 +139,30 @@ export function updateAnimals(sim: Sim, dt: number) {
 
   for (const a of sim.animals) {
     if (a.hitFlash > 0) a.hitFlash -= dt * 4
+    if (a.atkT > 0) a.atkT -= dt
 
-    const walkSpeed = a.kind === 'deer' ? ANIMALS.deerWalk : ANIMALS.rabbitWalk
-    const fleeSpeed = a.kind === 'deer' ? ANIMALS.deerFlee : ANIMALS.rabbitFlee
+    const walkSpeed = WALK[a.kind]
+    const fleeSpeed = FLEE[a.kind]
 
-    // player proximity triggers flee
+    // player proximity triggers flee (bears stand their ground)
     const dp = dist(a.pos, p.pos)
-    if (dp < ANIMALS.fleeTrigger && a.state !== 'flee') {
+    if (a.kind !== 'bear' && dp < ANIMALS.fleeTrigger && a.state !== 'flee') {
       a.state = 'flee'
       a.t = ANIMALS.fleeTime
     }
 
     switch (a.state) {
+      case 'charge': {
+        a.t -= dt
+        a.walkPhase += dt * ANIMALS.bear.charge * 2.2
+        if (dp > ANIMALS.bearReach) seek(a, p.pos, ANIMALS.bear.charge, dt, ANIMALS.bearReach * 0.9)
+        else if (a.atkT <= 0) bearSwipe(sim, a)
+        if (a.t <= 0 || dp > ANIMALS.bearAggro * 1.5) {
+          a.state = 'idle'
+          a.t = 1 + Math.random()
+        }
+        break
+      }
       case 'idle': {
         a.t -= dt
         if (a.t <= 0) {
@@ -118,30 +214,43 @@ export function updateAnimals(sim: Sim, dt: number) {
     a.pos.z = clamp(a.pos.z, m.z - m.r - 2, m.z + m.r + 2)
   }
 
-  // respawn to keep the population up (Wild Game upgrades raise it)
-  const wantDeer = deerTarget(sim.game.lvl)
-  let deer = 0
-  let rabbits = 0
-  for (const a of sim.animals) {
-    if (a.kind === 'deer') deer++
-    else rabbits++
+  // respawn to keep the population up (Wild Game upgrades and settlement level raise it)
+  const lvl = sim.rep.level
+  const counts: Record<AnimalKind, number> = { deer: 0, rabbit: 0, goat: 0, bear: 0 }
+  for (const a of sim.animals) counts[a.kind]++
+  const want: Record<AnimalKind, number> = {
+    deer: deerTarget(sim.game.lvl, lvl),
+    goat: bigGameTarget('goat', lvl),
+    bear: bigGameTarget('bear', lvl),
+    rabbit: ANIMALS.rabbitCount,
   }
-  if (deer < wantDeer || rabbits < ANIMALS.rabbitCount) {
+  // refill whichever kind is furthest below its target, so big game shows up even
+  // while the tower keeps thinning the deer
+  let next: AnimalKind | null = null
+  let worst = 1
+  for (const k of ['deer', 'goat', 'bear', 'rabbit'] as AnimalKind[]) {
+    if (want[k] <= 0) continue
+    const fill = counts[k] / want[k]
+    if (fill < worst) {
+      worst = fill
+      next = k
+    }
+  }
+  if (next) {
     sim.animalRespawnT -= dt
     if (sim.animalRespawnT <= 0) {
-      sim.animalRespawnT = animalRespawn(sim.game.lvl)
-      spawnAnimal(sim, deer < wantDeer ? 'deer' : 'rabbit')
+      sim.animalRespawnT = animalRespawn(sim.game.lvl, lvl)
+      const a = spawnAnimal(sim, next)
+      if (next === 'bear' || next === 'goat') {
+        sim.fx.push({ t: 'text', x: a.pos.x, y: 2.6, z: a.pos.z, str: next === 'bear' ? '🐻' : '🐐', size: 1.2 })
+      }
     }
   }
 
-  // tree regrowth lives here to keep the world tick together
-  for (const t of sim.trees) {
-    if (t.shake > 0) t.shake -= dt * 3
-    if (t.wood <= 0) {
-      t.regrowT -= dt
-      if (t.regrowT <= 0) t.wood = t.maxWood
-    }
-  }
+  // tree / fishing hole / coal seam regrowth lives here to keep the world tick together
+  regrow(sim.trees, dt)
+  regrow(sim.holes, dt)
+  regrow(sim.seams, dt)
 
   for (let i = sim.drops.length - 1; i >= 0; i--) {
     const d = sim.drops[i]

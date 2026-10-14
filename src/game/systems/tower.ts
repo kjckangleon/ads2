@@ -2,7 +2,7 @@ import type { Sim, V2 } from '../types'
 import { TOWER, ANIMALS, towerDamage, towerCooldown, towerRange, towerArrows } from '../balance'
 import { dist, lerpAngle, damp } from '../util'
 import { sfx } from '../audio'
-import { killAnimal, countDrops } from './animals'
+import { hurtAnimal, countDrops } from './animals'
 import { damageWolf } from './wolves'
 
 const FIRE_HEIGHT = 3.6
@@ -62,15 +62,7 @@ function impact(sim: Sim, targetId: number, damage: number) {
     return
   }
   const target = sim.animals.find((a) => a.id === targetId)
-  if (!target) return
-  target.hp -= damage
-  target.hitFlash = 1
-  target.state = 'flee'
-  target.t = ANIMALS.fleeTime * 0.7
-  sfx.hit()
-  sim.fx.push({ t: 'text', x: target.pos.x, y: 1.5, z: target.pos.z, str: `-${damage}`, color: '#ffcf5e', size: 0.75 })
-  sim.fx.push({ t: 'burst', x: target.pos.x, y: 0.7, z: target.pos.z, color: '#ffe0a0', n: 5, spread: 0.5 })
-  if (target.hp <= 0) killAnimal(sim, target)
+  if (target) hurtAnimal(sim, target, damage, true)
 }
 
 export function updateTower(sim: Sim, dt: number) {

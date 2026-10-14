@@ -72,6 +72,10 @@ function Paths() {
     { x: -30, z: WORLD.caravanSpot.z + 0.8, sx: 17, sz: 2.2 }, // caravan road
     { x: WORLD.tailor.x, z: WORLD.tailor.z + 1, sx: 3.4, sz: 2.6 },
     { x: WORLD.coatStation.x, z: WORLD.coatStation.z + 6, sx: 1.6, sz: 6.2 }, // coat queue
+    { x: WORLD.fishStation.x, z: WORLD.fishStation.z + 6, sx: 1.6, sz: 6.2 }, // fish queue
+    { x: WORLD.smokehouse.x, z: WORLD.smokehouse.z + 1, sx: 3.4, sz: 2.6 },
+    { x: WORLD.furnace.x, z: WORLD.furnace.z + 1, sx: 3.2, sz: 3 },
+    { x: WORLD.coalDepot.x, z: WORLD.coalDepot.z, sx: 2.6, sz: 2.2 },
   ]
   return (
     <group>
@@ -114,11 +118,9 @@ function makeForestTransforms(density: number): TreeXform[] {
     out.push({ x, z, s: randRange(rng, 0.8, 1.5), rot: rng() * Math.PI * 2 })
   }
   // inner decorative clusters (outside gameplay zones)
+  // (the fishery, mine and fish stall took over the old north / west clusters)
   const clusters = [
-    { cx: -30, cz: -18, r: 6, n: 8 },
-    { cx: -32, cz: 6, r: 4.5, n: 6 },
     { cx: -28, cz: 28, r: 5, n: 6 },
-    { cx: 5, cz: -24, r: 5, n: 7 },
   ]
   for (const cl of clusters) {
     for (let i = 0; i < Math.floor(cl.n * density); i++) {
@@ -202,6 +204,15 @@ function Forest({ density }: { density: number }) {
 
 // ---------- rocks ----------
 
+/** keep decorative rocks out of the districts and the west market */
+function insidePlayArea(x: number, z: number) {
+  const b = WORLD.bounds
+  if (x < b.minX - 1 || x > b.maxX + 1 || z < b.minZ - 1 || z > b.maxZ + 1) return false
+  if (z < -13 && x < 12) return true // fishery + mine
+  if (x < -23 && z > -9 && z < 16) return true // smokehouse + fish stall
+  return false
+}
+
 function Rocks() {
   const rockGeo = useMemo(() => new THREE.IcosahedronGeometry(0.7, 0), [])
   const rockMat = useMemo(
@@ -218,6 +229,7 @@ function Rocks() {
       const x = Math.cos(ang) * rad
       const z = Math.sin(ang) * rad
       if (Math.abs(x) < 6 && z > 16) continue
+      if (insidePlayArea(x, z)) continue
       out.push({ x, z, s: randRange(rng, 0.4, 1.6), rot: rng() * Math.PI * 2 })
     }
     // a few near the meadow for flavor
@@ -273,23 +285,6 @@ function Mountains() {
           </mesh>
         </group>
       ))}
-    </group>
-  )
-}
-
-// ---------- frozen pond ----------
-
-function Pond() {
-  return (
-    <group position={[-19, 0.015, -21]}>
-      <mesh rotation-x={-Math.PI / 2} scale={[5.5, 3.6, 1]}>
-        <circleGeometry args={[1, 28]} />
-        <meshStandardMaterial color="#a9cade" roughness={0.18} metalness={0.15} />
-      </mesh>
-      <mesh rotation-x={-Math.PI / 2} scale={[5.9, 4.0, 1]} position-y={-0.004}>
-        <circleGeometry args={[1, 28]} />
-        <meshBasicMaterial color="#dde8f2" />
-      </mesh>
     </group>
   )
 }
@@ -455,7 +450,6 @@ export function Environment() {
       <Forest density={density} />
       <Rocks />
       <Mountains />
-      <Pond />
       <Campfire />
       <Snowfall count={snowCount} />
     </group>

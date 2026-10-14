@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { sim, spawnAnimal } from '../game/state'
 import { useUI, type Quality } from '../game/uiStore'
 import { clearSave } from '../game/save'
-import { STATION_IDS, PROC_IDS, xpForLevel } from '../game/balance'
+import { STATION_IDS, PROC_IDS, ZONE_IDS, BELT_IDS, xpForLevel, capText } from '../game/balance'
 import { queueLength } from '../game/systems/customers'
 import { addXp } from '../game/systems/progress'
 import { startNight, endNight } from '../game/systems/clock'
@@ -52,17 +52,37 @@ export function DebugPanel() {
         </button>
         <button onClick={() => spawnWolf(s)}>+wolf</button>
         <button onClick={() => summonCaravan(s)}>caravan</button>
+      </div>
+      <div className="debug-row">
+        {ZONE_IDS.map((z) => (
+          <button
+            key={z}
+            className={s.zones[z] ? 'active' : ''}
+            onClick={() => {
+              const pad = s.pads.find((p) => p.id === `zone_${z}`)!
+              if (!s.zones[z]) {
+                pad.level = 1
+                pad.done = true
+                applyPad(s, pad)
+              }
+            }}
+          >
+            open {z}
+          </button>
+        ))}
         <button
           onClick={() => {
-            const pad = s.pads.find((p) => p.id === 'zone_tannery')!
-            if (!s.zones.tannery) {
-              pad.level = 1
-              pad.done = true
-              applyPad(s, pad)
+            for (const id of BELT_IDS) {
+              const pad = s.pads.find((p) => p.id === `belt_${id}`)!
+              if (pad.visible && !pad.locked && !pad.done) {
+                pad.level++
+                pad.done = pad.level >= pad.maxLevel
+                applyPad(s, pad)
+              }
             }
           }}
         >
-          open tannery
+          +belts
         </button>
       </div>
       <div className="debug-row">
@@ -102,13 +122,16 @@ export function DebugPanel() {
           `clock ${s.clock.enabled ? `${s.clock.night ? 'night' : 'day'} ${s.clock.day} t${s.clock.t.toFixed(0)}` : 'off'}  raids ${s.raid.count} stolen ${s.raid.stolen}`,
           ...STATION_IDS.map((id) => {
             const st = s.stations[id]
-            return `${id.padEnd(5)} ${st.unlocked ? '' : '(locked) '}stock ${st.stock}/${st.capacity} q${queueLength(st)} lv${st.level} $${st.price}`
+            return `${id.padEnd(5)} ${st.unlocked ? '' : '(locked) '}stock ${capText(st.stock, st.capacity)} q${queueLength(st)} lv${st.level} $${st.price}`
           }),
           ...PROC_IDS.map((id) => {
             const pr = s.proc[id]
-            return `${id.padEnd(7)} ${pr.unlocked ? '' : '(locked) '}in ${pr.inCount}/${pr.inCap} out ${pr.outCount}/${pr.outCap} lv${pr.level} ${pr.active ? 'WORKING' : 'idle'}`
+            return `${id.padEnd(7)} ${pr.unlocked ? '' : '(locked) '}in ${capText(pr.inCount, pr.inCap)} out ${capText(pr.outCount, pr.outCap)} lv${pr.level} ${pr.active ? 'WORKING' : 'idle'}`
           }),
-          `log pile ${s.depot.count}/${s.depot.cap}`,
+          `log pile ${s.depot.count}/${s.depot.cap}  coal pile ${s.coalDepot.count}/${s.coalDepot.cap}`,
+          `furnace ${s.furnace.built ? `fuel ${s.furnace.fuel}/${s.furnace.cap} lv${s.furnace.level} ${s.furnace.burning ? 'LIT' : 'cold'}` : 'not built'}`,
+          `belts ${BELT_IDS.map((id) => `${id}:${s.belts[id].level ? `L${s.belts[id].level}·${s.belts[id].items.length}` : '-'}`).join(' ')}`,
+          `tasks ${s.tasks.map((t) => `${t.kind}${t.station ? `/${t.station}` : ''} ${t.need}`).join(' | ')}`,
           `tower ${s.tower.built ? `dmg${s.tower.dmgLvl} spd${s.tower.spdLvl} rng${s.tower.rngLvl}` : 'not built'}`,
           `animals ${s.animals.length}  wolves ${s.wolves.length}  drops ${s.drops.length}`,
           `caravan ${s.caravan.state} ${s.caravan.state === 'away' ? `in ${s.caravan.nextIn.toFixed(0)}s` : `${s.caravan.timer.toFixed(0)}s`}  done ${s.stats.caravansDone}`,

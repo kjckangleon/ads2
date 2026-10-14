@@ -6,6 +6,9 @@ export const RES_ICON: Record<ResKind, string> = {
   cooked: '🍗',
   hide: '🐾',
   coat: '🧥',
+  fish: '🐟',
+  smoked: '🍣',
+  coal: '🪨',
 }
 
 export const RES_NAME: Record<ResKind, string> = {
@@ -14,12 +17,16 @@ export const RES_NAME: Record<ResKind, string> = {
   cooked: 'food',
   hide: 'hides',
   coat: 'coats',
+  fish: 'fish',
+  smoked: 'smoked fish',
+  coal: 'coal',
 }
 
 export const NEED_ICON: Record<StationId, string> = {
   wood: '🪵',
   meat: '🍖',
   coat: '🧥',
+  fish: '🐟',
 }
 
 export const ROLE_ICON: Record<WorkerRole, string> = {
@@ -32,4 +39,9 @@ export const ROLE_ICON: Record<WorkerRole, string> = {
   guard: '🛡️',
   tailor: '🧵',
   coatRunner: '🧥',
+  fisher: '🎣',
+  smoker: '🔥',
+  fishRunner: '🐟',
+  miner: '⛏️',
+  coalCarrier: '🪨',
 }

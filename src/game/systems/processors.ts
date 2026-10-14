@@ -1,4 +1,4 @@
-// Workshops (kitchen: raw -> cooked, tailor: hide -> coat). Work only runs
+// Workshops (kitchen: raw -> cooked, tailor: hide -> coat, smokehouse: fish -> smoked). Work only runs
 // while someone stands at the work spot: the hired staff or the player.
 
 import type { Sim } from '../types'
@@ -19,8 +19,8 @@ export function updateProcessors(sim: Sim, dt: number) {
     if (staffed && pr.inCount > 0 && pr.outCount < pr.outCap) {
       pr.active = true
       pr.t += dt
-      if (id === 'kitchen') sfx.sizzle()
-      else sfx.stitch()
+      if (id === 'tailor') sfx.stitch()
+      else sfx.sizzle()
       if (pr.t >= pr.time) {
         pr.t = 0
         pr.inCount--
@@ -33,6 +33,8 @@ export function updateProcessors(sim: Sim, dt: number) {
         })
         if (id === 'tailor') {
           sim.fx.push({ t: 'burst', x: pr.pos.x, y: 1.1, z: pr.pos.z, color: '#d9b8ff', n: 6, spread: 0.5 })
+        } else if (id === 'smokehouse') {
+          sim.fx.push({ t: 'burst', x: pr.pos.x, y: 2.6, z: pr.pos.z - 0.3, color: '#c9cfd8', n: 4, spread: 0.4, up: 2 })
         }
       }
     } else {

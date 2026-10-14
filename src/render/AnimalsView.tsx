@@ -1,35 +1,35 @@
-// Pooled deer, rabbits and raiding wolves (with health bars) — trot/hop
-// animation and hit flash.
+// Pooled deer, rabbits, goats, bears and raiding wolves (big game and wolves
+// get health bars) — trot/hop animation and hit flash.
 
 import { useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { sim } from '../game/state'
 import { makeAnimalRig, makeWolfRig, makeBar, setBar, type AnimalRig, type Bar } from './characters'
+import type { AnimalKind } from '../game/types'
 
-const DEER_POOL = 10
-const RABBIT_POOL = 6
+const POOL: Record<AnimalKind, number> = { deer: 16, rabbit: 6, goat: 8, bear: 4 }
+const KINDS: AnimalKind[] = ['deer', 'rabbit', 'goat', 'bear']
 const WOLF_POOL = 10
+/** big game gets a health bar so the long fight reads */
+const BAR_KINDS = new Set<AnimalKind>(['goat', 'bear'])
+const BAR_POOL = POOL.goat + POOL.bear
 
 export function AnimalsView() {
   const pool = useMemo(() => {
     const g = new THREE.Group()
-    const deer: AnimalRig[] = []
-    const rabbits: AnimalRig[] = []
+    const rigs = {} as Record<AnimalKind, AnimalRig[]>
+    for (const kind of KINDS) {
+      rigs[kind] = []
+      for (let i = 0; i < POOL[kind]; i++) {
+        const r = makeAnimalRig(kind)
+        r.group.visible = false
+        g.add(r.group)
+        rigs[kind].push(r)
+      }
+    }
     const wolves: AnimalRig[] = []
     const bars: Bar[] = []
-    for (let i = 0; i < DEER_POOL; i++) {
-      const r = makeAnimalRig('deer')
-      r.group.visible = false
-      g.add(r.group)
-      deer.push(r)
-    }
-    for (let i = 0; i < RABBIT_POOL; i++) {
-      const r = makeAnimalRig('rabbit')
-      r.group.visible = false
-      g.add(r.group)
-      rabbits.push(r)
-    }
     for (let i = 0; i < WOLF_POOL; i++) {
       const r = makeWolfRig()
       r.group.visible = false
@@ -40,35 +40,52 @@ export function AnimalsView() {
       g.add(bar.group)
       bars.push(bar)
     }
-    return { g, deer, rabbits, wolves, bars }
+    const gameBars: Bar[] = []
+    for (let i = 0; i < BAR_POOL; i++) {
+      const bar = makeBar(1.1, '#ffb347')
+      bar.group.visible = false
+      g.add(bar.group)
+      gameBars.push(bar)
+    }
+    return { g, rigs, wolves, bars, gameBars }
   }, [])
 
   useFrame(() => {
-    let di = 0
-    let ri = 0
+    const used: Record<AnimalKind, number> = { deer: 0, rabbit: 0, goat: 0, bear: 0 }
+    let bi = 0
     for (const a of sim.animals) {
-      const rig = a.kind === 'deer' ? pool.deer[di++] : pool.rabbits[ri++]
+      const rig = pool.rigs[a.kind][used[a.kind]++]
       if (!rig) continue
       rig.group.visible = true
       rig.group.position.set(a.pos.x, 0, a.pos.z)
       rig.group.rotation.y = a.yaw
 
       const moving = a.state !== 'idle'
-      if (a.kind === 'deer') {
-        rig.legs.forEach((leg, k) => {
-          leg.rotation.x = moving ? Math.sin(a.walkPhase * 2.4 + (k % 2) * Math.PI) * 0.55 : 0
-        })
-        rig.body.position.y = moving ? Math.abs(Math.sin(a.walkPhase * 2.4)) * 0.04 : 0
-        // graze when idle
-        rig.body.rotation.x = a.state === 'idle' ? Math.sin(sim.time * 0.8 + a.id) * 0.06 + 0.06 : 0
-      } else {
+      if (a.kind === 'rabbit') {
         rig.body.position.y = moving ? Math.abs(Math.sin(a.walkPhase * 3)) * 0.22 : 0
+      } else {
+        const gait = a.kind === 'bear' ? 1.8 : a.kind === 'goat' ? 2.8 : 2.4
+        const swing = a.kind === 'bear' ? 0.45 : 0.55
+        rig.legs.forEach((leg, k) => {
+          leg.rotation.x = moving ? Math.sin(a.walkPhase * gait + (k % 2) * Math.PI) * swing : 0
+        })
+        rig.body.position.y = moving ? Math.abs(Math.sin(a.walkPhase * gait)) * (a.kind === 'bear' ? 0.07 : 0.04) : 0
+        // graze when idle; a charging bear drops its head
+        rig.body.rotation.x =
+          a.state === 'charge' ? 0.12 : a.state === 'idle' ? Math.sin(sim.time * 0.8 + a.id) * 0.06 + 0.06 : 0
       }
       const f = Math.max(0, a.hitFlash)
       rig.mat.emissive.setRGB(f * 0.9, f * 0.3, f * 0.25)
+
+      if (BAR_KINDS.has(a.kind) && a.hp < a.maxHp && bi < BAR_POOL) {
+        const bar = pool.gameBars[bi++]
+        bar.group.visible = true
+        bar.group.position.set(a.pos.x, a.kind === 'bear' ? 2.2 : 1.8, a.pos.z)
+        setBar(bar, a.hp / a.maxHp)
+      }
     }
-    for (let i = di; i < DEER_POOL; i++) pool.deer[i].group.visible = false
-    for (let i = ri; i < RABBIT_POOL; i++) pool.rabbits[i].group.visible = false
+    for (const kind of KINDS) for (let i = used[kind]; i < POOL[kind]; i++) pool.rigs[kind][i].group.visible = false
+    for (let i = bi; i < BAR_POOL; i++) pool.gameBars[i].group.visible = false
 
     for (let i = 0; i < WOLF_POOL; i++) {
       const rig = pool.wolves[i]

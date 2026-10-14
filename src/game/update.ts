@@ -1,5 +1,5 @@
 import type { Sim } from './types'
-import { ECONOMY, CLOCK, RUSH, xpForLevel } from './balance'
+import { ECONOMY, CLOCK, RUSH, xpForLevel, furnaceBonus } from './balance'
 import { updateClock } from './systems/clock'
 import { updateCustomers } from './systems/customers'
 import { updatePlayer } from './systems/player'
@@ -8,6 +8,9 @@ import { updateWolves } from './systems/wolves'
 import { updateTower } from './systems/tower'
 import { updateWorkers } from './systems/workers'
 import { updateProcessors } from './systems/processors'
+import { updateBelts } from './systems/belts'
+import { updateTasks, taskProgress, taskText } from './systems/tasks'
+import { fmt } from './format'
 import { updateCaravan, orderText } from './systems/caravan'
 import { updateEconomy } from './systems/economy'
 import { updateObjectives, objectiveText } from './systems/objectives'
@@ -48,6 +51,26 @@ function syncUI(sim: Sim) {
     bannerText: sim.banner.text,
     bannerSub: sim.banner.sub,
     bannerTone: sim.banner.tone,
+    furnace: !sim.furnace.built ? '' : sim.furnace.burning ? 'lit' : 'cold',
+    furnaceBonus: Math.round(furnaceBonus(sim.furnace.level) * 100),
+    furnaceFrac: sim.furnace.built ? q(sim.furnace.fuel / sim.furnace.cap, 20) : 0,
+  }
+  // tasks are an array: only push them when something visible changed
+  const tasks = sim.tasks.map((t) => {
+    const p = taskProgress(sim, t)
+    return {
+      id: t.id,
+      text: taskText(t),
+      frac: q(p / t.need, 40),
+      progress: t.kind === 'earn' ? `$${fmt(p)}/$${fmt(t.need)}` : `${Math.floor(p)}/${t.need}`,
+      reward: `$${fmt(t.reward)}`,
+      done: t.doneT >= 0,
+    }
+  })
+  const tasksKey = tasks.map((t) => `${t.id}:${t.progress}:${t.done}`).join('|')
+  if (tasksKey !== useUI.getState().tasksKey) {
+    next.tasks = tasks
+    next.tasksKey = tasksKey
   }
   const ui = useUI.getState() as unknown as Record<string, unknown>
   for (const k in next) {
@@ -70,10 +93,12 @@ export function tick(sim: Sim, dt: number) {
   updateTower(sim, dt)
   updateWorkers(sim, dt)
   updateProcessors(sim, dt)
+  updateBelts(sim, dt)
   updateCaravan(sim, dt)
   updateEconomy(sim, dt)
   updateRush(sim, dt)
   updateObjectives(sim, dt)
+  updateTasks(sim, dt)
   updateBanners(sim, dt)
 
   if (sim.focus) {

@@ -16,9 +16,13 @@ import {
   CUSTOMER_PALETTES,
   type CharacterRig,
 } from './characters'
-import { emojiTexture } from './rutil'
+import { emojiTexture, TextLabel } from './rutil'
+import type { ResKind } from '../game/types'
 
-type Rig = CharacterRig & { variant: number; prevPhase: number }
+type Rig = CharacterRig & { variant: number; prevPhase: number; count: TextLabel }
+
+const CARRY_SHOWN = 3
+const carryBuf: ResKind[] = []
 
 function setIcon(rig: CharacterRig, char: string | null) {
   if (!char) {
@@ -62,10 +66,15 @@ export function CustomersView() {
     const rigs: Rig[] = []
     for (let i = 0; i < CUSTOMERS.maxCap; i++) {
       const variant = i % 6
-      const rig = makeCharacterRig(CUSTOMER_PALETTES[variant], 1)
+      const rig = makeCharacterRig(CUSTOMER_PALETTES[variant], CARRY_SHOWN)
       rig.group.visible = false
+      // "×3" bubble: how many more this survivor still wants
+      const count = new TextLabel(0.55, 128)
+      count.sprite.position.y = 2.62
+      count.sprite.visible = false
+      rig.group.add(count.sprite)
       g.add(rig.group)
-      rigs.push(Object.assign(rig, { variant, prevPhase: 0 }))
+      rigs.push(Object.assign(rig, { variant, prevPhase: 0, count }))
     }
     return { g, rigs }
   }, [])
@@ -105,8 +114,17 @@ export function CustomersView() {
       }
 
       setIcon(rig, iconFor(c))
-      rig.icon.position.y = 2.15 + Math.sin(sim.time * 2.2 + c.id * 1.7) * 0.06
-      syncCarry(rig, c.carrying ? [c.carrying] : [])
+      const bob = Math.sin(sim.time * 2.2 + c.id * 1.7) * 0.06
+      rig.icon.position.y = 2.15 + bob
+      const left = c.want - c.got
+      rig.count.sprite.visible = c.state !== 'leaving' && c.want > 1 && left > 0
+      if (rig.count.sprite.visible) {
+        rig.count.set(`×${left}`, c.vip ? '#ffe680' : '#ffffff')
+        rig.count.sprite.position.y = 2.62 + bob
+      }
+      carryBuf.length = 0
+      if (c.carrying) for (let k = 0; k < Math.min(Math.max(c.got, 1), CARRY_SHOWN); k++) carryBuf.push(c.carrying)
+      syncCarry(rig, carryBuf)
     }
   })
 

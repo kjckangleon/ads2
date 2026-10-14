@@ -13,18 +13,24 @@ export interface V3 {
 }
 
 /** Physical resource kinds that can be carried / stocked / dropped. */
-export type ResKind = 'log' | 'raw' | 'cooked' | 'hide' | 'coat'
+export type ResKind = 'log' | 'raw' | 'cooked' | 'hide' | 'coat' | 'fish' | 'smoked' | 'coal'
 
 /** Market stalls customers queue at. A customer's need is a stall id. */
-export type StationId = 'wood' | 'meat' | 'coat'
+export type StationId = 'wood' | 'meat' | 'coat' | 'fish'
 export type Need = StationId
 
 /** Workshops that turn one resource into another. */
-export type ProcessorId = 'kitchen' | 'tailor'
+export type ProcessorId = 'kitchen' | 'tailor' | 'smokehouse'
 
-export type PileId = 'woodPay' | 'meatPay' | 'coatPay' | 'caravanPay' | 'bountyPay'
+export type PileId = 'woodPay' | 'meatPay' | 'coatPay' | 'fishPay' | 'caravanPay' | 'bountyPay'
 
-export type ZoneId = 'tannery'
+export type ZoneId = 'tannery' | 'fishery' | 'mine'
+
+/** Gatherable spots: pines (logs), ice-fishing holes (fish), coal seams (coal). */
+export type NodeKind = 'tree' | 'hole' | 'seam'
+
+/** Conveyor belts: each one carries a single resource from a source to a sink. */
+export type BeltId = 'wood' | 'meat' | 'coat' | 'fish' | 'coal'
 
 export type CustomerState = 'toQueue' | 'queue' | 'leaving'
 
@@ -41,6 +47,9 @@ export interface CustomerSim {
   /** Sideways offset used while travelling so groups don't walk single-file. */
   laneOff: number
   serveT: number
+  /** items this survivor buys (grows with settlement level) and how many they've been handed */
+  want: number
+  got: number
   /** total seconds spent in line while the stall had nothing to sell */
   starveT: number
   carrying: ResKind | null
@@ -110,7 +119,7 @@ export interface TreeSim {
   scale: number
 }
 
-export type AnimalKind = 'deer' | 'rabbit'
+export type AnimalKind = 'deer' | 'rabbit' | 'goat' | 'bear'
 
 export interface AnimalSim {
   id: number
@@ -119,11 +128,14 @@ export interface AnimalSim {
   yaw: number
   hp: number
   maxHp: number
-  state: 'idle' | 'walk' | 'flee'
+  /** bears don't run: once hurt they charge the player */
+  state: 'idle' | 'walk' | 'flee' | 'charge'
   target: V2
   t: number
   hitFlash: number
   walkPhase: number
+  /** bear swipe cooldown */
+  atkT: number
 }
 
 export type WolfTarget = 'drop' | 'kitchenIn' | 'kitchenOut' | 'meat' | 'none'
@@ -186,6 +198,11 @@ export type WorkerRole =
   | 'guard'
   | 'tailor'
   | 'coatRunner'
+  | 'fisher'
+  | 'smoker'
+  | 'fishRunner'
+  | 'miner'
+  | 'coalCarrier'
 
 export type WorkerMode = 'idle' | 'fetch' | 'deliver' | 'work' | 'chase' | 'patrol'
 
@@ -243,6 +260,8 @@ export interface PadSim {
   level: number
   maxLevel: number
   pulse: number
+  /** seconds the player has stood on this pad; paying starts at ECONOMY.padHoldSeconds */
+  hold: number
 }
 
 export interface PlayerSim {
@@ -337,11 +356,70 @@ export type Fx =
   | { t: 'itemfly'; kind: ResKind; from: V3; to: V3 }
   | { t: 'shake'; power: number }
 
+/** A pile workers stack onto and haulers load from (forest log pile, mine coal pile). */
+export interface DepotSim {
+  pos: V2
+  count: number
+  cap: number
+  kind: ResKind
+}
+
+export interface BeltSim {
+  id: BeltId
+  kind: ResKind
+  /** 0 = not built; higher levels run faster */
+  level: number
+  path: V2[]
+  /** cumulative distance at each path point */
+  dists: number[]
+  length: number
+  /** distance along the path of every item on the belt, front-most first */
+  items: number[]
+  /** seconds items have spent waiting at the end (sink full) */
+  blockedT: number
+  /** delivered this frame (drives the end-of-belt squash) */
+  pulse: number
+}
+
+/** Coal burns here; while lit, every stall sale pays a bonus. */
+export interface FurnaceSim {
+  built: boolean
+  pos: V2
+  /** where coal is dropped in */
+  feed: V2
+  fuel: number
+  cap: number
+  burnT: number
+  level: number
+  burning: boolean
+}
+
+export type TaskKind = 'serve' | 'kills' | 'bears' | 'earn' | 'tips' | 'caravan' | 'coal' | 'buy' | 'rush'
+
+/** A rotating bounty-board goal: progress is a stat counted from when it was posted. */
+export interface TaskSim {
+  id: number
+  kind: TaskKind
+  station: StationId | null
+  need: number
+  /** stat value when the task was posted */
+  start: number
+  reward: number
+  xp: number
+  /** seconds since completion (-1 while open); paid out, then replaced */
+  doneT: number
+}
+
 export interface Stats {
   served: number
   woodServed: number
   meatServed: number
   coatServed: number
+  fishServed: number
+  coalBurned: number
+  bearKills: number
+  bought: number
+  tasksDone: number
   kills: number
   earned: number
   collected: number
@@ -366,6 +444,10 @@ export interface Sim {
   stations: Record<StationId, StationSim>
   proc: Record<ProcessorId, ProcessorSim>
   trees: TreeSim[]
+  /** ice-fishing holes in the fishery */
+  holes: TreeSim[]
+  /** coal seams in the mine */
+  seams: TreeSim[]
   animals: AnimalSim[]
   animalRespawnT: number
   wolves: WolfSim[]
@@ -377,7 +459,11 @@ export interface Sim {
   pads: PadSim[]
   chest: { pos: V2 }
   /** forest log pile: lumberjacks stack here once a carrier is hired */
-  depot: { pos: V2; count: number; cap: number }
+  depot: DepotSim
+  /** mine-mouth coal pile: miners stack here once a Coal Carrier is hired */
+  coalDepot: DepotSim
+  belts: Record<BeltId, BeltSim>
+  furnace: FurnaceSim
   stats: Stats
   fx: Fx[]
   /** camera focus override (world pos + remaining seconds) */
@@ -396,6 +482,7 @@ export interface Sim {
   game: { lvl: number }
   /** ground arrows around the player pointing at what matters right now */
   guides: Guide[]
+  tasks: TaskSim[]
   banners: Banner[]
   banner: Banner
   bannerT: number

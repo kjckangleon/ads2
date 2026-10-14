@@ -5,10 +5,23 @@ export type Quality = 'low' | 'medium' | 'high'
 function autoQuality(): Quality {
   if (typeof navigator === 'undefined') return 'high'
   const touch = 'ontouchstart' in window
+  // WebKit (every iOS browser, Edge and Chrome included) under-reports
+  // hardwareConcurrency, so the core count says nothing about an iPhone's GPU.
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  if (ios) return 'medium'
   const cores = navigator.hardwareConcurrency ?? 4
   if (touch && cores <= 4) return 'low'
   if (touch) return 'medium'
   return 'high'
+}
+
+export interface TaskView {
+  id: number
+  text: string
+  frac: number
+  progress: string
+  reward: string
+  done: boolean
 }
 
 export interface UIState {
@@ -34,6 +47,12 @@ export interface UIState {
   bannerText: string
   bannerSub: string
   bannerTone: string
+  /** '' = no furnace yet */
+  furnace: '' | 'cold' | 'lit'
+  furnaceBonus: number
+  furnaceFrac: number
+  tasks: TaskView[]
+  tasksKey: string
   muted: boolean
   quality: Quality
   debugOpen: boolean
@@ -63,6 +82,11 @@ export const useUI = create<UIState>((set) => ({
   bannerText: '',
   bannerSub: '',
   bannerTone: 'info',
+  furnace: '',
+  furnaceBonus: 0,
+  furnaceFrac: 0,
+  tasks: [],
+  tasksKey: '',
   muted: false,
   quality: autoQuality(),
   debugOpen: false,
