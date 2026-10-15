@@ -200,7 +200,11 @@ products that vehicles come to buy. The frozen camp becomes its supply chain.
   upgrades (Truck Depot + / Port + / Airport +) raise prices, load speed,
   storage, vehicle cargo capacity and frequency. Each terminal upgrade adds 20%
   of the baseline cargo capacity to newly dispatched trucks, ships and planes,
-  including past Lv10; active orders keep their current size. Large ship/plane
+  up to hard limits of **100 furniture per truck**, **300 steel per ship**, and
+  **200 total items per plane** (at the cap: 80 jackets + 120 canned fish).
+  Market pressure cannot exceed these limits. Terminal storage remains separate,
+  and upgrades still improve sale prices, loading speed and arrival frequency.
+  Active orders keep their current size. Large ship/plane
   orders receive enough loading time to complete. Ships first dispatch after 3 seconds and planes
   after 2 seconds; return waits are 15 / 12 seconds, improving to 6 / 5 seconds
   with terminal upgrades. Travel time is additional. The park HUD shows the next

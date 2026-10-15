@@ -389,9 +389,8 @@ function upgradeTerminal(sim: Sim, id: TerminalId) {
   sim.fx.push({ t: 'burst', x: t.pos.x, y: 1.6, z: t.pos.z, color: '#b0e0ff', n: 16, spread: 1.6 })
   if (t.level === FREIGHT.maxLevel)
     banner(sim, '♾️ Unlimited storage!', `The ${TERMINAL_CFG[id].name} can keep upgrading`, 'good')
-  const capacity = Math.round((1 + FREIGHT.orderCapacityPerLevel * t.level) * 100)
   const icon = id === 'dock' ? '🚚' : id === 'port' ? '🚢' : '✈️'
-  banner(sim, `${icon} Larger cargo orders!`, `Next dispatch: ${capacity}% of base capacity`, 'good')
+  banner(sim, `${icon} ${TERMINAL_CFG[id].name} upgraded!`, `Orders up to ${FREIGHT.cargoCap[id]} items · higher sale prices`, 'good')
   sfx.build()
 }
 

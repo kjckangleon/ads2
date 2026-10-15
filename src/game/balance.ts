@@ -1261,6 +1261,8 @@ export const FREIGHT = {
   minLoad: 0.03,
   /** Additional share of baseline vehicle capacity per terminal upgrade. */
   orderCapacityPerLevel: 0.2,
+  /** Total goods per vehicle, after all upgrade and market-demand multipliers. */
+  cargoCap: { dock: 100, port: 300, air: 200 },
   truck: {
     slots: 6,
     every: 7,

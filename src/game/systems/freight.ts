@@ -227,7 +227,7 @@ function truckWant(sim: Sim) {
     sim.terminals.dock.level,
   )
   // market pressure: a Truck Depot that's always stocked gets bigger orders
-  return Math.round(base * sim.terminals.dock.demand)
+  return Math.min(FREIGHT.cargoCap.dock, Math.round(base * sim.terminals.dock.demand))
 }
 
 function spawnTruck(sim: Sim) {
@@ -278,25 +278,24 @@ function updateTruck(sim: Sim, v: VehicleSim, dt: number) {
 
 function shipOrder(sim: Sim): FreightLine[] {
   const lvl = Math.max(0, sim.rep.level - 14)
-  const need = Math.round(
-    freightOrderCapacity(
-      SHIP.base + SHIP.perShip * sim.freight.ships + SHIP.perLevel * lvl,
-      SHIP.max,
-      sim.terminals.port.level,
-    ) * sim.freight.shipDemand,
+  const base = freightOrderCapacity(
+    SHIP.base + SHIP.perShip * sim.freight.ships + SHIP.perLevel * lvl,
+    SHIP.max,
+    sim.terminals.port.level,
   )
+  const need = Math.min(FREIGHT.cargoCap.port, Math.round(base * sim.freight.shipDemand))
   return [{ kind: 'steel', need, got: 0 }]
 }
 
 function planeOrder(sim: Sim): FreightLine[] {
   const lvl = Math.max(0, sim.rep.level - 16)
-  const need = Math.round(
-    freightOrderCapacity(
-      PLANE.base + PLANE.perPlane * sim.freight.planes + PLANE.perLevel * lvl,
-      PLANE.max,
-      sim.terminals.air.level,
-    ) * sim.freight.planeDemand,
+  const base = freightOrderCapacity(
+    PLANE.base + PLANE.perPlane * sim.freight.planes + PLANE.perLevel * lvl,
+    PLANE.max,
+    sim.terminals.air.level,
   )
+  // One jacket travels with 1.5 cans: cap the combined load, not each line.
+  const need = Math.min(Math.floor(FREIGHT.cargoCap.air / 2.5), Math.round(base * sim.freight.planeDemand))
   return [
     { kind: 'jacket', need, got: 0 },
     { kind: 'canned', need: Math.round(need * 1.5), got: 0 },
