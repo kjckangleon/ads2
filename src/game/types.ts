@@ -186,6 +186,7 @@ export type PerkId =
   | 'vip'
   | 'tips'
   | 'belts'
+  | 'forge'
   | 'arrows'
   | 'offline'
   | 'events'
@@ -503,6 +504,8 @@ export interface BeltSim {
   length: number
   /** distance along the path of every item on the belt, front-most first */
   items: number[]
+  /** goods in each item (Industrial Park crates carry several; everything else carries 1) */
+  qty: number[]
   /** seconds items have spent waiting at the end (sink full) */
   blockedT: number
   /** delivered this frame (drives the end-of-belt squash) */
@@ -647,6 +650,8 @@ export interface VehicleSim {
   maxTimer: number
   /** paint variant */
   variant: number
+  /** planes: holding short of the runway until it's clear to take off */
+  hold?: boolean
 }
 
 export interface FreightSim {

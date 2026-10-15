@@ -107,7 +107,8 @@ export const vertexColorMat = new THREE.MeshStandardMaterial({
   metalness: 0.02,
 })
 
-/** simple ground blob shadow */
+/** simple ground blob shadow, lifted over every ground layer (park roads and markings) so it never flickers */
+export const BLOB_Y = 0.07
 export const blobGeo = new THREE.CircleGeometry(0.5, 20)
 blobGeo.rotateX(-Math.PI / 2)
 export const blobMat = new THREE.MeshBasicMaterial({
@@ -119,7 +120,7 @@ export const blobMat = new THREE.MeshBasicMaterial({
 export function makeBlobShadow(scale = 1): THREE.Mesh {
   const m = new THREE.Mesh(blobGeo, blobMat)
   m.scale.setScalar(scale)
-  m.position.y = 0.02
+  m.position.y = BLOB_Y
   m.renderOrder = 1
   return m
 }

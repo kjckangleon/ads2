@@ -261,6 +261,23 @@ keep your progress when you move:
 - **🏭 Industrial Charter**: the Industrial Park, then the Port, then the
   Airport.
 
+Production speeds up too: **🧊 Permafrost Forge** (endless) makes workshops and
+factories work 20% faster per level, and every Frost Star adds 1% more (up to
++50%). The shop shows your total sales, worker and production bonuses.
+
+## Online save (⚙️ Settings)
+
+Pick a save name and password, tap **⬆️ Save online**, then on another device
+enter the same two and tap **⬇️ Load save** (it asks first, since it replaces
+that device's game). Saving again with the same name and password updates it.
+Passwords are stored only as a salted scrypt hash, and wrong passwords are
+rate-limited.
+
+It runs on a Vercel function (`api/save.js`) backed by Redis. One-time setup:
+in the Vercel project, **Storage → Create → Upstash (Redis)** and connect it to
+the project (this sets `KV_REST_API_URL` / `KV_REST_API_TOKEN`), then
+redeploy. `npm run dev` uses an in-memory store instead.
+
 ## Tuning notes
 
 - **Hands off (✋ / 🙅 button).** Stops you chopping, fishing, mining and
@@ -279,6 +296,16 @@ keep your progress when you move:
   budget, so a fully automated camp hums instead of machine-gunning. What
   the camp does on its own (belts, crew, customers, the tower) uses a quieter,
   rarer "ambient" voice; big moments (buying, level-ups, events) always play.
+- **Industrial Park crates.** Export lines and product belts carry crates
+  instead of single items: 1 + factory level x 0.25 / 0.5 / 0.75 goods per
+  slot (by the line's belt level). Factory upgrades never outgrow a belt that
+  can't run any faster, so ships and planes can actually be filled.
+- **Freight XP scales with your level.** A truck is worth 0.3% of the current
+  level, a full ship 2.5% and a full plane 3% (a third when they leave half
+  full), so the park is a real way to level up, not just cash.
+- **The tower never stops.** The meadow holds up to 45 raw meat; a new kill
+  pushes the oldest piece off to spoil, and old meat spoils once more than 12
+  lie around.
 - **Stall counts** sit above the roof so you can read them from the camera.
 - **Sound on phones.** Every tap restarts audio if the phone paused it
   (backgrounding, the lock screen or a call). On iPhone, the silent switch

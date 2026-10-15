@@ -156,7 +156,10 @@ export function VehiclesView() {
       const m = new THREE.Mesh(planeGeom, vertexColorMat)
       // small enough for five to park side by side at the cargo gates
       m.scale.setScalar(0.55)
-      return unit(m, 3.4)
+      const u = unit(m, 3.4)
+      // heading first, then pitch around the plane's own wings (not the world's X axis)
+      u.group.rotation.order = 'YXZ'
+      return u
     })
     root.add(...trucks.map((t) => t.group), ...ships.map((u) => u.group), ...planes.map((u) => u.group))
     return { root, trucks, ships, planes }

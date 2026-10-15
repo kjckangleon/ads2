@@ -12,7 +12,7 @@ import { CUSTOMERS } from '../game/balance'
 import { NEED_ICON } from '../game/icons'
 import type { CustomerSim, ResKind } from '../game/types'
 import { villagerTorsoGeo, CUSTOMER_PALETTES, legGeo, legMat, makeCarryItem, STACK_STEP } from './characters'
-import { vertexColorMat, blobGeo, blobMat } from './rutil'
+import { vertexColorMat, blobGeo, blobMat, BLOB_Y } from './rutil'
 
 const MAX = CUSTOMERS.maxCap
 const CARRY_SHOWN = 3
@@ -240,7 +240,7 @@ export function CustomersView() {
       }
 
       // ground shadow
-      tmp.local.makeTranslation(0, 0.02, 0)
+      tmp.local.makeTranslation(0, BLOB_Y, 0)
       tmp.out.multiplyMatrices(tmp.root, tmp.local)
       shadows.setMatrixAt(i, tmp.out)
 

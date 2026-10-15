@@ -246,7 +246,9 @@ function BeltView({ id }: { id: BeltId }) {
       const rise = Math.min(1, b.items[i] / 0.35)
       if (b.h > 0) tmp.p.set(tmp.at.x, tmp.at.y + 0.1, tmp.at.z)
       else tmp.p.set(tmp.at.x, TOP + 0.1 * rise + 0.06, tmp.at.z)
-      tmp.s.setScalar(0.4 + 0.6 * rise)
+      // Industrial Park crates read bigger the more goods they hold
+      const crate = b.qty[i] ?? 1
+      tmp.s.setScalar((0.4 + 0.6 * rise) * (crate > 1 ? Math.min(1.6, 1 + 0.12 * Math.log2(crate)) : 1))
       tmp.m.compose(tmp.p, tmp.q, tmp.s)
       v.items.setMatrixAt(i, tmp.m)
     }

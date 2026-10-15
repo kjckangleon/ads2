@@ -951,3 +951,46 @@ canvas {
   white-space: pre-wrap;
   color: #9fb4cc;
 }
+
+/* ☁️ online save */
+.hud-cloud {
+  margin: 4px 0 14px;
+  padding: 10px 12px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.hud-cloud-title {
+  font-weight: 800;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.hud-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  /* 16px keeps iOS from zooming in on focus */
+  font-size: 16px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.hud-input:focus {
+  outline: none;
+  border-color: #9fd3ff;
+}
+.hud-cloud-msg {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #a0ffb0;
+}
+.hud-cloud-msg.bad {
+  color: #ff9a8a;
+}
+.hud-modal-btn:disabled {
+  opacity: 0.45;
+}

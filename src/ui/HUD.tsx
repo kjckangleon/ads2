@@ -4,10 +4,11 @@ import { setMuted, isMuted } from '../game/audio'
 import { fmt } from '../game/format'
 import { sim } from '../game/state'
 import { claimOffline, buyPerk, canBuyPerk, perkCost, freeStars } from '../game/systems/meta'
-import { PERKS, PERK_IDS } from '../game/balance'
-import { perk } from '../game/perks'
+import { PERKS, PERK_IDS, starSalesMult, starWorkerMult } from '../game/balance'
+import { perk, prodPerkMult } from '../game/perks'
 import { requestSave } from '../game/saveFlag'
 import { hardReset } from '../game/save'
+import { cloudSave, cloudLoad, lastCloudName } from '../game/cloud'
 
 /** Rolls toward the real balance each animation frame and bumps on gains. */
 function Money() {
@@ -208,19 +209,76 @@ function Offline() {
   )
 }
 
-/** ⚙️ settings: for now, the hard reset (with a clear warning first) */
+/** ⚙️ settings: online save / load, and the hard reset (each with a clear warning first) */
 function Settings() {
   const set = useUI((s) => s.set)
-  const [confirm, setConfirm] = useState(false)
+  const [step, setStep] = useState<'' | 'reset' | 'load'>('')
+  const [name, setName] = useState(() => lastCloudName())
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ text: string; bad: boolean } | null>(null)
+  const ready = name.trim().length >= 3 && password.length >= 4 && !busy
+
+  const run = async (job: () => Promise<string | void>) => {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const text = await job()
+      if (text) setMsg({ text, bad: false })
+    } catch (e) {
+      setMsg({ text: e instanceof Error ? e.message : 'Something went wrong', bad: true })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="hud-modal-backdrop hud-interactive" onClick={() => set({ panel: '' })}>
       <div className="hud-modal" onClick={(e) => e.stopPropagation()}>
-        {!confirm ? (
+        {step === '' && (
           <>
             <div className="hud-modal-title">⚙️ Settings</div>
+            <div className="hud-cloud">
+              <div className="hud-cloud-title">☁️ Online save</div>
+              <div className="hud-modal-sub">
+                Pick a save name and password, save here, then load it on your phone (or any device) with the same two.
+              </div>
+              <input
+                className="hud-input"
+                placeholder="Save name"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                maxLength={20}
+                value={name}
+                onChange={(e) => setName(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
+              />
+              <input
+                className="hud-input"
+                type="password"
+                placeholder="Password"
+                autoComplete="current-password"
+                maxLength={64}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              {msg && <div className={`hud-cloud-msg${msg.bad ? ' bad' : ''}`}>{msg.text}</div>}
+              <div className="hud-modal-buttons">
+                <button
+                  className="hud-modal-btn gold"
+                  disabled={!ready}
+                  onClick={() => run(() => cloudSave(name, password))}
+                >
+                  {busy ? '…' : '⬆️ Save online'}
+                </button>
+                <button className="hud-modal-btn" disabled={!ready} onClick={() => setStep('load')}>
+                  ⬇️ Load save
+                </button>
+              </div>
+            </div>
             <div className="hud-modal-sub">Start the whole game again from the very beginning.</div>
             <div className="hud-modal-buttons">
-              <button className="hud-modal-btn danger" onClick={() => setConfirm(true)}>
+              <button className="hud-modal-btn danger" onClick={() => setStep('reset')}>
                 ↺ Reset game
               </button>
               <button className="hud-modal-btn" onClick={() => set({ panel: '' })}>
@@ -228,7 +286,29 @@ function Settings() {
               </button>
             </div>
           </>
-        ) : (
+        )}
+        {step === 'load' && (
+          <>
+            <div className="hud-modal-title">☁️ Load &quot;{name.trim().toLowerCase()}&quot;?</div>
+            <div className="hud-modal-sub">
+              The game on this device is replaced by the online save. Save this one online first if you want to keep it.
+            </div>
+            {msg && <div className={`hud-cloud-msg${msg.bad ? ' bad' : ''}`}>{msg.text}</div>}
+            <div className="hud-modal-buttons">
+              <button className="hud-modal-btn" disabled={busy} onClick={() => setStep('')}>
+                Back
+              </button>
+              <button
+                className="hud-modal-btn gold"
+                disabled={busy}
+                onClick={() => run(() => cloudLoad(name, password))}
+              >
+                {busy ? 'Loading…' : 'Yes, load it'}
+              </button>
+            </div>
+          </>
+        )}
+        {step === 'reset' && (
           <>
             <div className="hud-modal-title">⚠️ Do you really want to reset the game to start?</div>
             <div className="hud-modal-sub">
@@ -236,7 +316,7 @@ function Settings() {
               be undone.
             </div>
             <div className="hud-modal-buttons">
-              <button className="hud-modal-btn" onClick={() => setConfirm(false)}>
+              <button className="hud-modal-btn" onClick={() => setStep('')}>
                 No, keep playing
               </button>
               <button className="hud-modal-btn danger" onClick={() => hardReset()}>
@@ -337,6 +417,11 @@ function Shop() {
         <div className="hud-modal-title">❄️ Frost Star Shop</div>
         <div className="hud-modal-sub">
           {freeStars(sim)} to spend · bonuses from all {sim.meta.stars} stars stay forever
+        </div>
+        <div className="hud-modal-sub">
+          Your bonuses: sales +{Math.round((starSalesMult(sim.meta.stars) - 1) * 100)}% · workers +
+          {Math.round((starWorkerMult(sim.meta.stars) - 1) * 100)}% · production +
+          {Math.round((prodPerkMult(sim) - 1) * 100)}%
         </div>
         <div className="hud-shop-list">
           {PERK_IDS.map((id) => {

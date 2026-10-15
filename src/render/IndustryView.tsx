@@ -56,7 +56,8 @@ function buildGround(): THREE.Group {
   // the avenue from the gate to the airport, and a plaza around the vault
   asphalt.push(flat(-1.2, 34.6, 3.2, 55))
   for (let z = 36; z < 54; z += 3) white.push(flat(0.92, z, 1.08, z + 1.5, 0.03))
-  concrete.push(flat(PARK.vault.x - 2.6, PARK.vault.z - 2.4, PARK.vault.x + 2.6, PARK.vault.z + 2.4, 0.025))
+  // the plaza sits on the avenue, so it's lifted over the asphalt layer
+  concrete.push(flat(PARK.vault.x - 2.6, PARK.vault.z - 2.4, PARK.vault.x + 2.6, PARK.vault.z + 2.4, 0.045))
   // factory lots
   for (const id of FACTORY_IDS) {
     const p = sim.proc[id].pos
@@ -75,10 +76,17 @@ function buildGround(): THREE.Group {
   for (let i = 0; i < 6; i++) white.push(flat(4 + 0, rz - 2 + i * 0.75, 8, rz - 1.7 + i * 0.75, 0.03))
   // taxiway from the apron to the runway
   asphalt.push(flat(-1.5, 63.5, 3.5, rz - 2.3))
-  root.add(new THREE.Mesh(mergeGeometries(asphalt)!, asphaltMat))
-  root.add(new THREE.Mesh(mergeGeometries(concrete)!, concreteMat))
-  root.add(new THREE.Mesh(mergeGeometries(lines)!, lineMat))
-  root.add(new THREE.Mesh(mergeGeometries(white)!, whiteMat))
+  // Each layer gets its own height so overlaps never z-fight (flicker): concrete lots
+  // at the bottom, roads and the runway over them, then the painted markings
+  const layer = (geos: THREE.BufferGeometry[], mat: THREE.Material, lift: number) => {
+    const m = new THREE.Mesh(mergeGeometries(geos)!, mat)
+    m.position.y = lift
+    root.add(m)
+  }
+  layer(asphalt, asphaltMat, 0.015)
+  layer(concrete, concreteMat, 0)
+  layer(lines, lineMat, 0.03)
+  layer(white, whiteMat, 0.03)
   for (const m of root.children as THREE.Mesh[]) {
     m.receiveShadow = true
     m.renderOrder = 1

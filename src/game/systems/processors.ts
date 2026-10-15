@@ -7,6 +7,7 @@ import { PROC_IDS, PLAYER, FACTORY_IDS, MACHINE_IDS, MACHINE_CFG, machineSpeedMu
 import { dist } from '../util'
 import { sfx } from '../audio'
 import { machineStaffs } from './belts'
+import { prodPerkMult } from '../perks'
 
 export function updateProcessors(sim: Sim, dt: number) {
   for (const id of PROC_IDS) {
@@ -22,7 +23,10 @@ export function updateProcessors(sim: Sim, dt: number) {
     if (staffed && pr.inCount > 0 && pr.outCount < pr.outCap) {
       pr.active = true
       const machine = MACHINE_IDS.find((mid) => MACHINE_CFG[mid].proc === id && sim.machines[mid].level > 0)
-      const workTime = Math.max(0.02, pr.time / (machine ? machineSpeedMult(sim.machines[machine].level) : 1))
+      const workTime = Math.max(
+        0.004,
+        Math.max(0.02, pr.time / (machine ? machineSpeedMult(sim.machines[machine].level) : 1)) / prodPerkMult(sim),
+      )
       // upgraded factories turn each input into more than one product (the fraction carries over)
       const yieldPer = procYield(id, pr.level)
       // fast lines don't spawn a flying item for every single product

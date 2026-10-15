@@ -9,7 +9,7 @@ import { sim } from '../game/state'
 import { PLAYER, flyMult } from '../game/balance'
 import { makeCharacterRig, animateRig, PLAYER_PALETTE } from './characters'
 import { CarryStack } from './CarryStack'
-import { TextLabel, blobGeo } from './rutil'
+import { TextLabel, blobGeo, BLOB_Y } from './rutil'
 import { damp } from '../game/util'
 
 const MAX_SLOTS = PLAYER.baseCarry + PLAYER.carryPerLvl * 6 + 2
@@ -113,7 +113,7 @@ export function PlayerView() {
       for (const f of flames) f.scale.set(1, 0.7 + Math.random() * 0.5 + frac * 1.4, 1)
     }
     if (shadow) {
-      shadow.position.set(p.pos.x, 0.02, p.pos.z)
+      shadow.position.set(p.pos.x, BLOB_Y, p.pos.z)
       shadow.scale.setScalar(1 - Math.min(0.45, lift * 0.25))
     }
 

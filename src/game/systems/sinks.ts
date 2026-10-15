@@ -10,7 +10,7 @@ export interface Source {
   kind: ResKind
   open: boolean
   count: number
-  take: () => void
+  take: (n?: number) => void
 }
 
 /** Somewhere items are dropped into: a stall counter, a workshop input, the furnace. */
@@ -21,7 +21,7 @@ export interface Sink {
   open: boolean
   count: number
   cap: number
-  put: () => void
+  put: (n?: number) => void
   /** worker activity while unloading */
   label: string
   full: string
@@ -33,9 +33,9 @@ export function procSource(pr: ProcessorSim): Source {
     kind: pr.outKind,
     open: pr.unlocked,
     count: pr.outCount,
-    take: () => {
-      pr.outCount--
-      pr.taken = (pr.taken ?? 0) + 1
+    take: (n = 1) => {
+      pr.outCount -= n
+      pr.taken = (pr.taken ?? 0) + n
     },
   }
 }
@@ -46,9 +46,9 @@ export function depotSource(d: DepotSim): Source {
     kind: d.kind,
     open: true,
     count: d.count,
-    take: () => {
-      d.count--
-      d.taken = (d.taken ?? 0) + 1
+    take: (n = 1) => {
+      d.count -= n
+      d.taken = (d.taken ?? 0) + n
     },
   }
 }
@@ -61,7 +61,7 @@ export function stationSink(sim: Sim, id: StationId): Sink {
     open: st.unlocked,
     count: st.stock,
     cap: st.capacity,
-    put: () => st.stock++,
+    put: (n = 1) => (st.stock += n),
     label: 'restocking counter',
     full: 'counter full!',
   }
@@ -74,7 +74,7 @@ export function procInSink(pr: ProcessorSim): Sink {
     open: pr.unlocked,
     count: pr.inCount,
     cap: pr.inCap,
-    put: () => pr.inCount++,
+    put: (n = 1) => (pr.inCount += n),
     label: `stocking the ${pr.id}`,
     full: `${pr.id} full!`,
   }
@@ -88,7 +88,7 @@ export function furnaceSink(sim: Sim): Sink {
     open: f.built,
     count: f.fuel,
     cap: f.cap,
-    put: () => f.fuel++,
+    put: (n = 1) => (f.fuel += n),
     label: 'stoking the furnace',
     full: 'furnace full!',
   }
@@ -101,7 +101,7 @@ export function depotSink(d: DepotSim, label: string): Sink {
     open: true,
     count: d.count,
     cap: d.cap,
-    put: () => d.count++,
+    put: (n = 1) => (d.count += n),
     label,
     full: `${label.replace(/^stacking /, '')} pile full!`,
   }
@@ -115,7 +115,7 @@ export function terminalSink(t: TerminalSim, kind: ResKind): Sink {
     open: t.open,
     count: t.stock[kind] ?? 0,
     cap: t.cap,
-    put: () => (t.stock[kind] = (t.stock[kind] ?? 0) + 1),
+    put: (n = 1) => (t.stock[kind] = (t.stock[kind] ?? 0) + n),
     label: `stocking the ${t.id}`,
     full: `${t.id} full!`,
   }

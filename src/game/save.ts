@@ -39,7 +39,7 @@ import {
 } from './balance'
 import { hireWorker } from './systems/workers'
 import { levelFromTotalXp } from './systems/progress'
-import { retireWorkers } from './systems/belts'
+import { retireWorkers, beltLoad } from './systems/belts'
 import { openParkStage } from './systems/economy'
 import { RES_NAME } from './icons'
 
@@ -100,9 +100,9 @@ const PROC_BELT: Record<ProcessorId, BeltId[]> = {
 /** machine goods (buffer + belt) that were on their way into this workshop */
 function inFlightTo(sim: Sim, id: ProcessorId): number {
   const m = sim.machines
-  if (id === 'kitchen') return sim.belts.skinRaw.items.length + (m.skinner.buf.raw ?? 0)
-  if (id === 'tailor') return sim.belts.skinHide.items.length + (m.skinner.buf.hide ?? 0)
-  if (id === 'smokehouse') return sim.belts.auger.items.length + (m.auger.buf.fish ?? 0)
+  if (id === 'kitchen') return beltLoad(sim.belts.skinRaw) + (m.skinner.buf.raw ?? 0)
+  if (id === 'tailor') return beltLoad(sim.belts.skinHide) + (m.skinner.buf.hide ?? 0)
+  if (id === 'smokehouse') return beltLoad(sim.belts.auger) + (m.auger.buf.fish ?? 0)
   // factories: export items go back to the camp pile they came from
   return 0
 }
@@ -137,7 +137,7 @@ export function saveNow(sim: Sim) {
         PROC_IDS.map((id) => {
           const pr = sim.proc[id]
           // items riding a belt go back on the table they came from (or on to the one they were headed for)
-          const outCount = pr.outCount + PROC_BELT[id].reduce((n, b) => n + sim.belts[b].items.length, 0)
+          const outCount = pr.outCount + PROC_BELT[id].reduce((n, b) => n + beltLoad(sim.belts[b]), 0)
           const inCount = pr.inCount + inFlightTo(sim, id)
           return [id, { level: pr.level, inCount, outCount, unlocked: pr.unlocked }]
         }),
@@ -181,15 +181,15 @@ export function saveNow(sim: Sim) {
       rushBest: sim.rush.best,
       depot:
         sim.depot.count +
-        sim.belts.wood.items.length +
-        sim.belts.exLog.items.length +
-        sim.belts.saw.items.length +
+        beltLoad(sim.belts.wood) +
+        beltLoad(sim.belts.exLog) +
+        beltLoad(sim.belts.saw) +
         (sim.machines.saw.buf.log ?? 0),
       coalDepot:
         sim.coalDepot.count +
-        sim.belts.coal.items.length +
-        sim.belts.exCoal.items.length +
-        sim.belts.drill.items.length +
+        beltLoad(sim.belts.coal) +
+        beltLoad(sim.belts.exCoal) +
+        beltLoad(sim.belts.drill) +
         (sim.machines.drill.buf.coal ?? 0),
       furnaceFuel: sim.furnace.fuel,
       // finished-but-unpaid tasks are kept open so the reward isn't lost
@@ -419,6 +419,31 @@ export function loadSave(sim: Sim): boolean {
   } catch {
     return false
   }
+}
+
+/** the raw saved game on this device (after writing the latest), for uploading */
+export function readRawSave(sim: Sim): string | null {
+  saveNow(sim)
+  try {
+    return localStorage.getItem(KEY)
+  } catch {
+    return null
+  }
+}
+
+/** replace this device's game with a downloaded save and restart on it */
+export function installSave(raw: string): boolean {
+  try {
+    const d = JSON.parse(raw)
+    if (!d || ![1, 2, 3].includes(d.v)) return false
+    wiping = true
+    localStorage.setItem(KEY, raw)
+  } catch {
+    wiping = false
+    return false
+  }
+  if (typeof window !== 'undefined' && window.location) window.location.reload()
+  return true
 }
 
 export function clearSave() {

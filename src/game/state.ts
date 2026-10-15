@@ -209,6 +209,7 @@ function makeBelt(id: BeltId): BeltSim {
     dists,
     length: run + lift * 2,
     items: [],
+    qty: [],
     blockedT: 0,
     pulse: 0,
   }

@@ -4,7 +4,7 @@
 // product belts or carried in by hand) and pays onto the terminal's pile.
 
 import type { Sim, VehicleSim, TerminalSim, FreightLine, RoutePt, VehicleKind } from '../types'
-import { FREIGHT, PARK, freightPrice, freightOrderCapacity, starSalesMult } from '../balance'
+import { FREIGHT, PARK, freightPrice, freightOrderCapacity, freightXp, starSalesMult } from '../balance'
 import { RES_ICON } from '../icons'
 import { fmt } from '../format'
 import { sfx } from '../audio'
@@ -60,11 +60,41 @@ function planeArriveRoute(gate: number): RoutePt[] {
     pt(g.x, g.z, 2),
   ]
 }
-function planeLeaveRoute(gate: number): RoutePt[] {
+/** where a departing plane waits, nose short of the runway, for it to be clear */
+const HOLD_Z = PARK.runwayZ - 6
+function planeHoldRoute(gate: number): RoutePt[] {
+  return [pt(PARK.gates[gate].x, HOLD_Z, 3)]
+}
+function planeTakeoffRoute(gate: number): RoutePt[] {
   const z = PARK.runwayZ
   const g = PARK.gates[gate]
-  // back onto the runway, then east and lift off over the port
-  return [pt(g.x, z, 3), pt(g.x + 10, z, 10), pt(30, z, 20), pt(70, z, 26, 10), pt(170, z, 30, 36)]
+  // onto the runway, then west down its whole length (away from the Port at its
+  // east end), lift off, and climb out over the sea clear of planes landing from the west
+  return [
+    pt(g.x, z, 3),
+    pt(g.x - 8, z, 8),
+    pt(-80, z, 22),
+    pt(-120, z, 26, 6),
+    pt(-165, z + 30, 30, 20),
+    pt(-260, z + 130, 32, 42),
+  ]
+}
+/** the takeoff route's waypoint index where the plane has lifted clear of the runway */
+const LIFTED_SEG = 4
+
+/** a plane landing or still rolling on the runway, or another one taking off */
+function runwayBusy(sim: Sim, me: VehicleSim) {
+  return sim.freight.vehicles.some(
+    (o) =>
+      o !== me &&
+      o.kind === 'plane' &&
+      ((o.state === 'arrive' && o.seg <= 4) || (o.state === 'leave' && !o.hold && o.seg <= LIFTED_SEG)),
+  )
+}
+
+/** a departure is waiting for (or using) the runway: inbound planes wait their turn */
+function departuresWaiting(sim: Sim) {
+  return sim.freight.vehicles.some((o) => o.kind === 'plane' && o.state === 'leave' && (o.hold || o.seg <= LIFTED_SEG))
 }
 
 /** a berth / gate nobody is using right now (-1 = all busy) */
@@ -238,7 +268,7 @@ function updateTruck(sim: Sim, v: VehicleSim, dt: number) {
     pay(sim, t, v, full ? 0 : -0.25)
     sim.freight.trucks++
     sim.stats.trucksDone++
-    addXp(sim, FREIGHT.xpTruck)
+    addXp(sim, freightXp(sim.rep.level, FREIGHT.xpTruck))
     v.slot = -1
     leave(v, truckLeaveRoute())
   }
@@ -296,11 +326,11 @@ function updateBig(sim: Sim, v: VehicleSim, t: TerminalSim, dt: number, cfg: typ
   if (ship) {
     sim.freight.ships++
     sim.stats.shipsDone++
-    addXp(sim, full ? FREIGHT.xpShip : FREIGHT.xpShip / 3)
+    addXp(sim, freightXp(sim.rep.level, full ? FREIGHT.xpShip : FREIGHT.xpShip / 3))
   } else {
     sim.freight.planes++
     sim.stats.planesDone++
-    addXp(sim, full ? FREIGHT.xpPlane : FREIGHT.xpPlane / 3)
+    addXp(sim, freightXp(sim.rep.level, full ? FREIGHT.xpPlane : FREIGHT.xpPlane / 3))
   }
   const icon = ship ? '🚢' : '✈️'
   if (full) {
@@ -309,7 +339,13 @@ function updateBig(sim: Sim, v: VehicleSim, t: TerminalSim, dt: number, cfg: typ
   } else if (total > 0) {
     banner(sim, `${icon} Left half full`, `+$${fmt(total)}, fill the whole order for the bonus`, 'info')
   }
-  leave(v, ship ? shipLeaveRoute(v.slot) : planeLeaveRoute(v.slot))
+  if (ship) leave(v, shipLeaveRoute(v.slot))
+  else {
+    // taxi up to the runway and wait to be cleared for takeoff
+    leave(v, planeHoldRoute(v.slot))
+    v.hold = true
+    v.t = v.slot
+  }
   v.slot = -1
 }
 
@@ -339,7 +375,7 @@ export function updateFreight(sim: Sim, dt: number) {
   const gate = air.open ? freeSpot(sim, 'plane', f.gates) : -1
   if (gate >= 0) {
     f.planeT -= dt
-    if (f.planeT <= 0) {
+    if (f.planeT <= 0 && !departuresWaiting(sim)) {
       f.planeT = Math.max(PLANE.minEvery, PLANE.every * Math.pow(0.9, air.level))
       const v = newVehicle(sim, 'plane', planeArriveRoute(gate))
       v.slot = gate
@@ -351,7 +387,14 @@ export function updateFreight(sim: Sim, dt: number) {
   for (let i = f.vehicles.length - 1; i >= 0; i--) {
     const v = f.vehicles[i]
     if (v.state === 'leave') {
-      if (drive(v, dt)) f.vehicles.splice(i, 1)
+      if (v.hold) {
+        // at the hold line: go once nothing is landing or rolling on the runway
+        if (drive(v, dt) && !runwayBusy(sim, v)) {
+          v.hold = false
+          v.route = planeTakeoffRoute(v.t)
+          v.seg = 0
+        }
+      } else if (drive(v, dt)) f.vehicles.splice(i, 1)
       continue
     }
     if (v.kind === 'truck') updateTruck(sim, v, dt)

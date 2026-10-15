@@ -34,6 +34,7 @@ import {
   MACHINE_IDS,
   MACHINE_CFG,
   beltSpeed,
+  crateSize,
   machineWorkTime,
   furnacePay,
   starSalesMult,
@@ -136,12 +137,37 @@ function exportAllowed(sim: Sim, id: BeltId, srcCount: number, dt: number): bool
   return srcCount >= FREIGHT.exportOverflow || st.ex <= share * st.all + 0.5
 }
 
-function noteExport(sim: Sim, id: BeltId) {
+function noteExport(sim: Sim, id: BeltId, n: number) {
   const st = sharesFor(sim)[id]
-  if (st) st.ex++
+  if (st) st.ex += n
 }
 
 const isExport = (id: BeltId) => (EXPORT_BELT_IDS as BeltId[]).includes(id)
+
+/** the factory each Industrial Park line feeds or empties: its level sets the crate size */
+const PARK_LINE_FACTORY: Partial<Record<BeltId, ProcessorId>> = {
+  exLog: 'furnFactory',
+  pFurn: 'furnFactory',
+  exCoal: 'steelMill',
+  pSteel: 'steelMill',
+  exCoat: 'fashion',
+  pJacket: 'fashion',
+  exFish: 'cannery',
+  pCanned: 'cannery',
+}
+
+/** goods one item on this belt carries */
+export function beltCrate(sim: Sim, id: BeltId) {
+  const f = PARK_LINE_FACTORY[id]
+  return f ? crateSize(sim.proc[f].level, sim.belts[id].level) : 1
+}
+
+/** every good riding a belt right now */
+export function beltLoad(b: { items: number[]; qty: number[] }) {
+  let n = 0
+  for (let i = 0; i < b.items.length; i++) n += b.qty[i] ?? 1
+  return n
+}
 
 function machineSource(m: MachineSim, kind: ResKind): Source {
   return {
@@ -275,8 +301,14 @@ function updateBelt(sim: Sim, id: BeltId, dt: number) {
   // front item: deliver when it reaches the end and the sink has room
   if (items.length && items[0] >= b.length - 0.001) {
     if (sink.open && sink.count < sink.cap) {
-      items.shift()
-      sink.put()
+      // a crate unloads what fits; the rest waits for room
+      const n = Math.min(b.qty[0] ?? 1, sink.cap - sink.count)
+      sink.put(n)
+      if ((b.qty[0] ?? 1) > n) b.qty[0] -= n
+      else {
+        items.shift()
+        b.qty.shift()
+      }
       b.blockedT = 0
       b.pulse = 0.18
       sfx.beltDrop()
@@ -300,9 +332,11 @@ function updateBelt(sim: Sim, id: BeltId, dt: number) {
   const exp = isExport(id)
   if (exp && !exportAllowed(sim, id, src.count, dt)) return
   if (src.open && src.count > 0 && last >= BELT.spacing) {
-    src.take()
+    const n = Math.max(1, Math.min(Math.floor(src.count), beltCrate(sim, id)))
+    src.take(n)
     items.push(0)
-    if (exp) noteExport(sim, id)
+    b.qty.push(n)
+    if (exp) noteExport(sim, id, n)
   }
 }
 

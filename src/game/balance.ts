@@ -660,6 +660,13 @@ export const PERKS: Record<PerkId, PerkDef> = {
     costs: [2, 3, 5],
     endless: true,
   },
+  forge: {
+    icon: '🧊',
+    name: 'Permafrost Forge',
+    desc: 'Workshops and factories produce 20% faster',
+    costs: [2, 4, 6],
+    endless: true,
+  },
   arrows: { icon: '🏹', name: 'Eagle Eye', desc: 'The tower fires one more arrow', costs: [3, 6, 10, 15] },
   offline: {
     icon: '🌙',
@@ -716,6 +723,9 @@ export const PRESTIGE = {
   salesPerStar: 0.1,
   workerSpeedPerStar: 0.02,
   maxWorkerSpeed: 0.6,
+  /** every star also speeds up workshops and factories a little */
+  prodPerStar: 0.01,
+  maxProd: 0.5,
   startCashPerStar: 1000,
   /** seconds of "packing up" before the new camp loads */
   moveTime: 2.2,
@@ -726,6 +736,9 @@ export function starsFor(earned: number) {
 }
 export function starSalesMult(stars: number) {
   return 1 + PRESTIGE.salesPerStar * stars
+}
+export function starProdMult(stars: number) {
+  return 1 + Math.min(PRESTIGE.maxProd, PRESTIGE.prodPerStar * stars)
 }
 export function starWorkerMult(stars: number) {
   return 1 + Math.min(PRESTIGE.maxWorkerSpeed, PRESTIGE.workerSpeedPerStar * stars)
@@ -1127,6 +1140,20 @@ export const CASH_PATHS: Record<CashBeltId, V2[]> = {
   ],
 }
 
+/**
+ * Industrial Park lines (export lines and product belts) carry crates: each slot
+ * holds several goods, more as the factory and its belt are upgraded, so endless
+ * factory upgrades never outgrow a belt that can't run any faster.
+ */
+export const CRATE = {
+  /** goods per crate = 1 + factory level x this (by the line's belt level) */
+  perFactoryLvl: [0.25, 0.5, 0.75],
+}
+export function crateSize(factoryLvl: number, beltLvl: number) {
+  const k = CRATE.perFactoryLvl[Math.max(0, Math.min(CRATE.perFactoryLvl.length, beltLvl) - 1)]
+  return 1 + Math.floor(Math.max(0, factoryLvl) * k)
+}
+
 export function beltSpeed(level: number) {
   return BELT.speed + BELT.speedPerLvl * Math.max(0, Math.min(level, BELT.maxLevel) - 1)
 }
@@ -1250,9 +1277,15 @@ export const FREIGHT = {
   /** export belts: share of the camp source they may take, by belt level (they also take any overflow) */
   exportShare: [0, 0.4, 0.55, 0.7],
   exportOverflow: 8,
-  xpTruck: 6,
-  xpShip: 40,
-  xpPlane: 60,
+  /** XP per vehicle as a share of the current level (half-full ships and planes pay a third) */
+  xpTruck: 0.003,
+  xpShip: 0.025,
+  xpPlane: 0.03,
+}
+
+/** freight XP keeps pace with the level curve, so the park is a real way to level up */
+export function freightXp(level: number, frac: number) {
+  return Math.max(1, Math.round(xpForLevel(level) * frac))
 }
 
 export function terminalCap(level: number) {

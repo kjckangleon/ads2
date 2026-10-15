@@ -36,6 +36,8 @@ function recompute() {
 export function initInput() {
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return
+    // typing in a text box (online save name / password) doesn't walk the player
+    if ((e.target as Element | null)?.closest?.('input, textarea')) return
     held.add(e.code)
     recompute()
     unlockAudio()
