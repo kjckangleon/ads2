@@ -366,13 +366,14 @@ test('truck, ship and plane cargo capacity grows with each terminal upgrade', ()
   } finally { Math.random = random }
 })
 
-test('old freight order ceilings scale with terminal upgrades', () => {
+test('late-game orders stop at the vehicle cargo caps', () => {
   for (const kind of ['truck', 'ship', 'plane'] as const) {
     const sim = freightCamp(kind, 10, 1000)
     sim.rep.level = 200
     const v = dispatch(sim, kind)
-    const oldMax = kind === 'truck' ? FREIGHT.truck.maxWant : FREIGHT[kind].max
-    assert.equal(v.order[0].need, oldMax * 3)
+    const cap = kind === 'truck' ? 100 : kind === 'ship' ? 300 : 200
+    assert.equal(v.order.reduce((sum, line) => sum + line.need, 0), cap)
+    if (kind === 'plane') assert.deepEqual(v.order.map((line) => line.need), [80, 120])
   }
 })
 
@@ -407,5 +408,41 @@ test('large upgraded ship and plane orders can finish loading before timeout', (
     assert.ok(v.order.every((o) => o.got === o.need), kind)
     const pay = Math.round(v.order.reduce((sum, o) => sum + o.got * freightPrice(o.kind, terminal.level), 0) * (1 + FREIGHT[kind].bonus))
     assert.equal(sim.piles.find((p) => p.id === terminal.pile)!.value, pay)
+  }
+})
+
+test('market pressure and saved upgrades cannot exceed vehicle cargo caps', () => {
+  for (const kind of ['truck', 'ship', 'plane'] as const) {
+    for (const demand of [1, 4, 100]) {
+      const sim = freightCamp(kind, 50, 1000)
+      sim.rep.level = 100
+      sim.terminals.dock.demand = demand
+      sim.freight.shipDemand = sim.freight.planeDemand = demand
+      saveNow(sim)
+      const next = reload()
+      const vehicle = dispatch(next, kind)
+      const cap = kind === 'truck' ? 100 : kind === 'ship' ? 300 : 200
+      assert.equal(vehicle.order.reduce((sum, line) => sum + line.need, 0), cap)
+    }
+  }
+})
+
+test('capped vehicles load, leave and pay for only their capped cargo', () => {
+  for (const kind of ['truck', 'ship', 'plane'] as const) {
+    const sim = freightCamp(kind, 10, 1000)
+    sim.rep.level = 100
+    sim.terminals.dock.demand = sim.freight.shipDemand = sim.freight.planeDemand = 100
+    const id = kind === 'truck' ? 'dock' : kind === 'ship' ? 'port' : 'air'
+    for (const terminal of Object.values(sim.terminals)) terminal.open = terminal.id === id
+    const terminal = sim.terminals[id]
+    for (const k of terminal.kinds) terminal.stock[k] = 1000
+    const vehicle = dispatch(sim, kind)
+    const expectedCount = kind === 'truck' ? 100 : kind === 'ship' ? 300 : 200
+    advanceFreightUntil(sim, () => vehicle.state === 'leave', 90)
+    assert.equal(vehicle.order.reduce((sum, line) => sum + line.got, 0), expectedCount)
+    assert.ok(vehicle.order.every((line) => line.got === line.need))
+    const bonus = kind === 'truck' ? 0 : FREIGHT[kind].bonus
+    const expectedPay = Math.round(vehicle.order.reduce((sum, line) => sum + line.got * freightPrice(line.kind, terminal.level), 0) * (1 + bonus))
+    assert.equal(sim.piles.find((pile) => pile.id === terminal.pile)!.value, expectedPay)
   }
 })
