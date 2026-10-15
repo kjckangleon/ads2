@@ -1886,7 +1886,7 @@ export const PAD_DEFS: PadDef[] = [
     baseCost: 300000,
     costMult: 1,
     maxLevel: 1,
-    requires: ['belt_cash', 'm_saw@1', 'm_drill@1'],
+    requires: ['belt_cash@1', 'm_saw@1', 'm_drill@1'],
   },
   { id: 'ex_log', x: -22.6, z: 37.2, label: 'Log Export', icon: '🚛', baseCost: 120000, costMult: 2.4, maxLevel: 3 },
   {

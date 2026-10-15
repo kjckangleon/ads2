@@ -195,6 +195,9 @@ export function missingText(sim: Sim, requires: string[]): string {
     const need = at ? Number(at) : def.maxLevel
     const p = sim.pads.find((x) => x.id === id)!
     if (p.level >= need) continue
+    // a hire a belt or machine has already replaced (e.g. Miners after the Auto Drill,
+    // or anything Blueprints built in a new camp) counts as done
+    if (RETIRABLE.has(id) && beltReplaces(sim, id as WorkerRole)) continue
     missing.push(need > 1 ? `${def.label} ${p.level}/${need}` : def.label)
   }
   if (!missing.length) return ''
@@ -670,8 +673,9 @@ export function updateEconomy(sim: Sim, dt: number) {
       pad.hold = 0
       continue
     }
-    // prerequisites: everything a pad builds on must be fully bought first
-    if (!pad.lockText && def.requires) pad.lockText = missingText(sim, def.requires)
+    // prerequisites: everything a pad builds on must be fully bought first. They only gate the
+    // first build: once it stands (bought, or pre-built by a Frost Star perk) upgrades are open
+    if (!pad.lockText && def.requires && pad.level === 0) pad.lockText = missingText(sim, def.requires)
     if (pad.id === 'prestige' && pendingStars(sim) < 1) pad.lockText = 'Sell more to earn ❄️'
     const cap = def.gated ? Math.min(def.maxLevel, upgradeCap(sim.rep.level)) : def.maxLevel
     pad.locked = pad.lockText !== '' || pad.level >= cap
